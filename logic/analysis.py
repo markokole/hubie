@@ -1,6 +1,4 @@
 import pandas as pd
-#import numpy as np
-#from datetime import timedelta
 import warnings
 from datetime import datetime
 
@@ -26,7 +24,6 @@ class Analysis:
         self.__roster = self.__utility.roster
         self.__lov_fouls = self.__utility.LOV_fouls()
         self.__lov_shots = self.__utility.LOV_shots()
-        # self.__match_id = self.__utility.match_id
         self.__home_team = self.__utility.home_team
         self.__away_team = self.__utility.away_team
         self.__dict_teams = self.__utility.dict_team_names()
@@ -48,14 +45,14 @@ class Analysis:
         now = datetime.now()
         current_time = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        home_away_team = self.__home_team + "(Home) vs " + self.__away_team + "(Away)"
+        home_away_team = self.__home_team + " vs " + self.__away_team
         game_header = [
             [self.__competition, self.__match_id, self.__home_team, self.__away_team, home_away_team, current_time]]
         game_header_df = pd.DataFrame.from_records(game_header,
                                                    columns=['Competition', "MatchId", "Home", "Away", "HomeAwayTeam",
                                                             'Created'])
         folder_name = "match_header"
-        # print(game_header_df)
+        #print(game_header_df)
         self.__save_dataframe(game_header_df, folder_name)
 
     def point_accumulation(self):
@@ -82,8 +79,8 @@ class Analysis:
         dict_home_shots_cum = home_shots_cum_df.to_dict()
         dict_away_shots_cum = away_shots_cum_df.to_dict()
 
-        dict_home_cum_score = {'1900-01-01 00:0:00': 0}
-        dict_away_cum_score = {'1900-01-01 00:0:00': 0}
+        dict_home_cum_score = {'1900-01-01 00:00:00': 0}
+        dict_away_cum_score = {'1900-01-01 00:00:00': 0}
         list_all_minutes = list(pd.Series(
             pd.date_range(start='1900-01-01 00:01:00', end='1900-01-01 00:40:00', freq='min'))
                                 .dt.strftime('%M-%s'))
@@ -118,9 +115,13 @@ class Analysis:
             .rename(columns={'index': 'Minute', 'Score': 'Away'})
 
         cum_score_df = pd.merge(home_cum_score_df, away_cum_score_df, on="Minute")
-        cum_score_df['MatchId'] = self.__match_id
+        cum_score_df['MinuteRound'] = cum_score_df.Minute.astype(str).str[-5:-3]
+        cum_score_df['Difference'] = cum_score_df.Home - cum_score_df.Away # if positive -> Home leading
 
+        cum_score_df['MatchId'] = self.__match_id
+        cum_score_df = cum_score_df.sort_values(by='Minute')
         folder_name = "cumulative_score"
+        #return cum_score_df
         self.__save_dataframe(cum_score_df, folder_name)
 
     def assist(self):
@@ -136,8 +137,8 @@ class Analysis:
         assist_df = assist_df.drop(['ShotResult', 'Player'], axis=1).reset_index(drop=True)
 
         folder_name = "assists"
-        #self.__save_dataframe(assist_df, folder_name)
-        return assist_df
+        print(assist_df)
+        self.__save_dataframe(assist_df, folder_name)
 
     def scoring(self):
         """
@@ -167,24 +168,22 @@ class Analysis:
         """
 
         shooting_stat_df = self.__shooting_stat_df.drop(['PlayerName', 'Team'], axis=1)
-        shooting_stat_df['Point'] = (shooting_stat_df.Made2 * 2) + (shooting_stat_df.Made3 * 3)
+        shooting_stat_df['Point'] = (shooting_stat_df.Made1 * 1) + (shooting_stat_df.Made2 * 2) + (shooting_stat_df.Made3 * 3)
         shooting_stat_df['MissedShot'] = shooting_stat_df.Missed2 + shooting_stat_df.Missed3
         shooting_stat_df['MissedFreeThrow'] = shooting_stat_df.Missed1
-
         non_shooting_stat_df = self.__non_shooting_stat_df
         non_shooting_stat_df['Rebound'] = non_shooting_stat_df.DefensiveRebound + non_shooting_stat_df.OffensiveRebound
 
         all_stat_df = pd.DataFrame.merge(shooting_stat_df, non_shooting_stat_df, on=['Player', 'MatchId'])
 
-        all_stat_df['Efficiency'] = (all_stat_df.Point + \
-                                     all_stat_df.Rebound + \
-                                     all_stat_df.Assist + \
-                                     all_stat_df.Steal + \
-                                     all_stat_df.Block) \
-                                    - \
-                                    (all_stat_df.MissedShot + \
-                                     all_stat_df.MissedFreeThrow + \
-                                     all_stat_df.Turnover + \
+        all_stat_df['Efficiency'] = (all_stat_df.Point +
+                                     all_stat_df.Rebound +
+                                     all_stat_df.Assist +
+                                     all_stat_df.Steal +
+                                     all_stat_df.Block) - \
+                                    (all_stat_df.MissedShot +
+                                     all_stat_df.MissedFreeThrow +
+                                     all_stat_df.Turnover +
                                      all_stat_df.Foul)
 
         reverse_dict_teams = {value: key for key, value in self.__dict_teams.items()}
