@@ -36,7 +36,7 @@ class Logic:
 
         df = df[['HomeAwayTeam', 'MatchId']]
         self.__title = df['HomeAwayTeam'].loc[f_match_id][0]
-        return [{'label': row['HomeAwayTeam'], 'value': row['MatchId']} for idx, row in df.iterrows()]
+        return [{'label': "   " + row['HomeAwayTeam'], 'value': row['MatchId']} for idx, row in df.iterrows()]
 
     def final_score(self):
         """
@@ -69,7 +69,7 @@ class Logic:
             h3_id = 'h3-away-table'
             table_id = 'stats-away-table'
 
-        cols = ['PlayerName', 'Foul', 'Made1', 'Missed1', 'Made2', 'Missed2', 'Made3', 'Missed3']
+        cols = ['PlayerName', 'Point', 'Foul', 'Made1', 'Missed1', 'Made2', 'Missed2', 'Made3', 'Missed3']
         cols += ['OffensiveRebound', 'DefensiveRebound', 'Assist', 'Turnover', 'Steal', 'Block', 'Efficiency']
         df = df[cols]
 
@@ -98,42 +98,49 @@ class Logic:
         _return = html.Div([list_div[0], list_div[1]])
         return _return
 
-    def __cumulative_scoring(self, home_away):
-        """
-        Method groups score per minute and acumulates them
-        :param home_away:
-        :return: DataFrame with cumulative points and every minute of the game
-        """
-        df = self.__u.load_dataframe("scoring")
-        df = df.loc[(df.HomeAway == home_away) & (df.MatchId == self.__match_id)]
-        df['MinuteRound'] = df.MinuteRound.astype(str).str[-5:-3]  # take only minutes and seconds from timestamp
-        cols = ['MinuteRound', 'Point']
-        df = df[cols].groupby(['MinuteRound']).sum().reset_index()
-        df['CumulativePoints'] = df.Point.cumsum()
-
-        return df
-
     def cumulative_scoring_data(self):
         """
         Prepare an object so the it can be outputed to the graph
         :return: Returns an object that is a property 'data' for the graph component
         """
-        df_scoring_home = self.__cumulative_scoring('Home')
-        x_minutes = df_scoring_home['MinuteRound']
-        y_home = df_scoring_home['CumulativePoints']
-        df_scoring_away = logic.__cumulative_scoring('Away')
-        y_away = df_scoring_away['CumulativePoints']
 
-        trace = [go.Scatter(x=x_minutes, y=y_home, name=self.__home_team),
+        # prepare series for cumulative graph
+        df = self.__u.load_dataframe("cumulative_score")
+        df = df.loc[df.MatchId == self.__match_id]
+        x_minutes = df['MinuteRound']
+        y_home = df['Home']
+        y_away = df['Away']
+
+        # create two series - one with positive Difference for Home team, and negative for Away team
+        df_difference_home = df[['MinuteRound', 'Difference']].loc[df.Difference >= 0]
+        difference_home = df_difference_home['Difference']
+        x_difference_minutes_home = df_difference_home['MinuteRound']
+        df_difference_away = df[['MinuteRound', 'Difference']].loc[df.Difference < 0]
+        difference_away = df_difference_away['Difference']
+        x_difference_minutes_away = df_difference_away['MinuteRound']
+
+        # data for accumulated graph
+        accumulation_data = [go.Scatter(x=x_minutes, y=y_home, name=self.__home_team),
                  go.Scatter(x=x_minutes, y=y_away, name=self.__away_team)]
-        data_cum_scoring = {"data": trace,
+
+        # data for difference graph
+        difference_data = [{'x': x_difference_minutes_home, 'y': difference_home, 'type': 'bar', 'name': self.__home_team},
+                           {'x': x_difference_minutes_away, 'y': difference_away, 'type': 'bar', 'name': self.__away_team}]
+
+        figure_cum_scoring = {"data": accumulation_data,
                             "layout": go.Layout(yaxis={"title": "Points"},
                                                 xaxis={"title": "Minute"},
                                                 title="Scoring per minute "
                                                 )
                             }
-        _return = html.Div(dcc.Graph(id='graph-cumulative-score',
-                                     figure=data_cum_scoring),
+
+        figure_difference =  {"data": difference_data}
+
+        _return = html.Div([dcc.Graph(id='graph-cumulative-score',
+                                      figure=figure_cum_scoring),
+                            dcc.Graph(id='graph-difference',
+                                      figure=figure_difference)
+                            ],
                            style={'width': '75%'})
         return _return
 
@@ -243,7 +250,10 @@ app.layout = html.Div([
                   dcc.Tab(label='Efficiency', value='efficiency'),
                   dcc.Tab(label='Assist', value='assist')
               ]),
-              html.Div(id='tabs-content-example')],
+              html.Div(id='tabs-content-example'),
+              html.Br(),
+              html.Br(),
+              html.Br()],
              className="split right"
              )
 ])
