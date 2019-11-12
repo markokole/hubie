@@ -72,30 +72,29 @@ class Utility:
 ######
 ## Load data
 ######   
+    '''
+        def __load_files(self):
+            """
+            Loads all files in a dictionary. key: file path, value: file body
+            """
+            events_files = {}
+            summary_files = {} # TO-DO
+            for obj in self.__bucket.objects.filter(Prefix=self.__path_staging_in):
+                file_name = obj.key
+                if file_name.find('Event') != -1:
+                    obj = self.__s3.Object(self.__bucket_name, file_name)
+                    body = obj.get()['Body'].read()
+                    events_files[file_name] = body.decode("utf-8")
+            print("Number of Events files loaded: {}.".format(len(events_files)))
 
-    def __load_files(self):
-        """
-        Loads all files in a dictionary. key: file path, value: file body
-        """
-        events_files = {}
-        summary_files = {} # TO-DO
-        #bucket = self.s3.Bucket(self.__bucket_name)
-        for obj in self.__bucket.objects.filter(Prefix=self.__path_staging_in):
-            file_name = obj.key
-            if file_name.find('Event') != -1:
-                obj = self.__s3.Object(self.__bucket_name, file_name)
-                body = obj.get()['Body'].read()
-                events_files[file_name] = body.decode("utf-8")
-        print("Number of Events files loaded: {}.".format(len(events_files)))
-        
-        return events_files, summary_files
-    
-    def move_file(self, file_name):
-        """
-        """
-        self.s3.Object(self.__bucket_name, self.__path_historical_files + file_name). \
-            copy_from(CopySource=self.__bucket_name + self.__path_staging_in + file_name)
-        
+            return events_files, summary_files
+
+        def move_file(self, file_name):
+            """
+            """
+            self.s3.Object(self.__bucket_name, self.__path_historical_files + file_name). \
+                copy_from(CopySource=self.__bucket_name + self.__path_staging_in + file_name)    
+    '''
 
 ######
 ## Prepare dataframes
@@ -128,7 +127,7 @@ class Utility:
         events = events.loc[events.PeriodTime != ''] # remove rows with no time
         
         events['PeriodName'] = events['PeriodName'].str.replace('. periode', '') # remove .periode
-        #events['Team'] = events['Team'].str.replace('B', 'Away') #change norwegian B (Borte) with english A (Away)
+        # events['Team'] = events['Team'].str.replace('B', 'Away') #change norwegian B (Borte) with english A (Away)
         events['Team'] = events['Team'].replace({'B': 'Away', 'H': 'Home'})
         
         # type conversion
@@ -406,6 +405,9 @@ class Utility:
 ######    
     def get_roster(self):
         return self.__roster()
+
+    def get_shooting_stat(self):
+        return self.__shooting_stat()
 
 ######
 ## List of values
