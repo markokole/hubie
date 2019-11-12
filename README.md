@@ -1,2 +1,3 @@
-# hubie
-Basketball play-by-play analysis
+# Hubie
+
+Code for analyzing Basketball's play-by-play data.

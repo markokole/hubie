@@ -1,0 +1,40 @@
+html, body {
+  height: 400px;
+  font-family: "fira-sans-2",sans-serif;
+  color: #333;
+}
+h1, h2, h3, h4, h5, h6 {
+    color: blue;
+}
+
+.graph {
+    //height: 300px;
+    position: relative;
+    display: inline-block;
+    //float: top;
+    padding: 7px 10px 5px 30px;
+    ////margin-right: 100px;
+    ////text-decoration: none;
+    ////cursor: default;
+    color: red;
+}
+
+.split {
+  height: 100%;
+  width: 75%;
+  position: fixed;
+  z-index: 1;
+  top: 0;
+  overflow-x: hidden;
+  padding-top: 20px;
+}
+
+.left {
+  left: 0;
+  background-color: #ddd;
+}
+
+.right {
+  right: 0;
+  background-color: white;
+}
