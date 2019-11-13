@@ -1,50 +1,82 @@
+from datetime import datetime
+from logic.dictionary import Dictionary
 import json
 import pandas as pd
-import requests
 import numpy as np
-from datetime import timedelta
 import boto3
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-from logic.dictionary import Dictionary
 
 class Utility:    
-    def __init__(self, events_file=""):
+    def __init__(self, match_id=0):
         
         self.__dic = Dictionary()
-        self.__events_file = events_file
-        
+        self.__match_id = match_id
+        self.__events_file = str(self.__match_id) + "_MatchEventsViewModel.json"
+        self.__summary_file = str(self.__match_id) + "_MatchSummaryViewModel.json"
         self.__s3 = boto3.resource('s3')
         self.__bucket_name = "hubie"
         self.__path_staging_in = "blno/STAGING_IN/"
         self.__path_historical_files = 'blno/HISTORICAL_FILES/'
-        
         self.__bucket = self.__s3.Bucket(self.__bucket_name)
-        self.__obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + self.__events_file)
-        self.__body = self.__obj.get()['Body'].read().decode("utf-8")
-        
-        self.data_events = ""
-        
-        if self.__events_file != "":
-        
-            print("Processing events file: {}".format(self.__path_staging_in + self.__events_file))
-            if self.__events_file.find("Events") != -1:
-                self.__data = json.loads(self.__body)
-                self.data_events = self.__data
-                self.home_team = self.__data['HomeTeam']
-                self.away_team = self.__data['AwayTeam']
 
-                self.match_id = ''.join([c for c in self.__events_file if c.isdigit()])
-                self.events = self.__event()
-                self.roster = self.__roster()
-                self.shooting_stat = self.__shooting_stat()
-                self.non_shooting_stat = self.__non_shooting_stat()
-                self.players_all_playtimes = self.__players_all_playtimes()
-                self.event_lineups = self.__event_lineups()
-            else:
-                print("Invalid file: " + self.__events_file + ". Expected an Events file.")
-    
+        if self.__match_id > 0:
+            self.__parse_events_file()
+
+    def __parse_events_file(self):
+        """
+        :return:
+        """
+        print("Processing events file: {}".format(self.__path_staging_in + self.__events_file))
+        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + self.__events_file)
+        body = obj.get()['Body'].read().decode("utf-8")
+        self.__data = json.loads(body)
+        self.home_team = self.__data['HomeTeam']
+        self.away_team = self.__data['AwayTeam']
+
+        self.events = self.__event()
+        self.roster = self.__roster()
+        self.shooting_stat = self.__shooting_stat()
+        self.non_shooting_stat = self.__non_shooting_stat()
+        self.players_all_playtimes = self.__players_all_playtimes()
+        self.event_lineups = self.__event_lineups()
+
+    def __parse_summary_file(self):
+        """
+        Method returns a DataFrame because it takes in a JSON file with metadata about a match
+        :return:
+        """
+        print("Processing summary file: {}".format(self.__path_staging_in + self.__summary_file))
+        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + self.__summary_file)
+        body = obj.get()['Body'].read().decode("utf-8")
+        data_summary = json.loads(body)
+        now = datetime.now()
+        current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        #print(data_summary)
+        self.__tournament = data_summary['Tournament']
+        self.__home_team = data_summary['HomeTeam']
+        self.__away_team = data_summary['AwayTeam']
+        self.__score_home = data_summary['HomeGoals']
+        self.__score_away = data_summary['AwayGoals']
+        self.__match_date = data_summary['Date'][:10] # get only date
+        self.__periods = data_summary['Periods']
+        self.__period_score_home = []
+        self.__period_score_away = []
+
+        for i in range(len(self.__periods)):
+            self.__period_score_home.append(self.__periods[i]['HomeGoals'])
+            self.__period_score_away.append(self.__periods[i]['AwayGoals'])
+
+        match_summary = [[self.__tournament, self.__match_id, self.__home_team, self.__away_team, self.__match_date, self.__score_home, self.__score_away,
+                          self.__period_score_home, self.__period_score_away, current_time]]
+
+        columns = ['Tournament', 'MatchId', 'HomeTeam', 'AwayTeam', 'Match Date', 'Score Home', 'Score Away', 'Period Score Home', 'Period Score Away', 'CreatedTime']
+        df = pd.DataFrame(data=match_summary, columns=columns)
+
+        return df
+
 ######
 ## Load DataFrames
 ###### 
@@ -70,38 +102,10 @@ class Utility:
         return df
     
 ######
-## Load data
-######   
-    '''
-        def __load_files(self):
-            """
-            Loads all files in a dictionary. key: file path, value: file body
-            """
-            events_files = {}
-            summary_files = {} # TO-DO
-            for obj in self.__bucket.objects.filter(Prefix=self.__path_staging_in):
-                file_name = obj.key
-                if file_name.find('Event') != -1:
-                    obj = self.__s3.Object(self.__bucket_name, file_name)
-                    body = obj.get()['Body'].read()
-                    events_files[file_name] = body.decode("utf-8")
-            print("Number of Events files loaded: {}.".format(len(events_files)))
-
-            return events_files, summary_files
-
-        def move_file(self, file_name):
-            """
-            """
-            self.s3.Object(self.__bucket_name, self.__path_historical_files + file_name). \
-                copy_from(CopySource=self.__bucket_name + self.__path_staging_in + file_name)    
-    '''
-
-######
 ## Prepare dataframes
 ######    
     
     def __roster(self):
-        players_full_list = []
         home_players = self.__data['HomePlayers']
         away_players = self.__data['AwayPlayers']
 
@@ -226,7 +230,7 @@ class Utility:
 
         global_play_interval = pd.DataFrame.from_records(global_play_interval_list, columns=['HomeAway', 'Player', 'In', 'Out'])
         global_play_interval['PlayTime'] = global_play_interval.Out - global_play_interval.In
-        global_play_interval['MatchId'] = self.match_id
+        global_play_interval['MatchId'] = self.__match_id
         
         return global_play_interval
     
@@ -261,7 +265,7 @@ class Utility:
                     list_events_players.append(row)
 
         event_lineups_df = pd.DataFrame.from_records(list_events_players)
-        event_lineups_df['MatchId'] = self.match_id
+        event_lineups_df['MatchId'] = self.__match_id
         
         return event_lineups_df
     
@@ -310,7 +314,7 @@ class Utility:
         shot_df = pd.DataFrame.from_records(list_all_rows, columns=["Player", "Made2", "Missed2", "Made1", "Missed1", "Made3", "Missed3"])
         shot_df['PlayerName'] = shot_df.Player.replace(self.dict_player_fullname())
         shot_df['Team'] = shot_df.Player.replace(self.dict_player_team())
-        shot_df['MatchId'] = self.match_id
+        shot_df['MatchId'] = self.__match_id
         return shot_df
         
     
@@ -391,7 +395,7 @@ class Utility:
         non_shot_df = pd.DataFrame.from_records(list_all_rows, columns= ['Player'] + event_type) # columns are all event types
         non_shot_df['PlayerName'] = non_shot_df.Player.replace(self.dict_player_fullname())
         non_shot_df['Team'] = non_shot_df.Player.replace(self.dict_player_team())
-        non_shot_df['MatchId'] = self.match_id
+        non_shot_df['MatchId'] = self.__match_id
         
         all_non_shot_stat_df = pd.DataFrame.merge(non_shot_df, self.__assist_stat()) # join to get assists data
         all_non_shot_stat_df2 = pd.DataFrame.merge(all_non_shot_stat_df, self.__foul_stat()) # join to get fouls data
@@ -408,6 +412,9 @@ class Utility:
 
     def get_shooting_stat(self):
         return self.__shooting_stat()
+
+    def get_match_summary(self):
+        return self.__parse_summary_file()
 
 ######
 ## List of values
@@ -462,7 +469,7 @@ class Utility:
         json_data = df.to_json(force_ascii=False, date_format='iso', orient='records', lines=True)
         
 
-        s3object = s3_resource.Object(bucket_name, competition + self.match_id + '.json')
+        s3object = s3_resource.Object(bucket_name, competition + str(self.__match_id) + '.json')
 
         s3object.put(
             Body=(bytes(json_data.encode('UTF-8')))

@@ -1,7 +1,5 @@
 import pandas as pd
 import warnings
-from datetime import datetime
-
 from logic.dictionary import Dictionary
 from logic.utility import Utility
 
@@ -12,11 +10,11 @@ class Analysis:
     dry_run: if True, do not write to S3
     """
 
-    def __init__(self, match_id, competition, dry_run=True):
+    def __init__(self, match_id, dry_run=True):
 
         self.__match_id = match_id
-        self.__file = str(self.__match_id) + "_MatchEventsViewModel.json"
-        self.__utility = Utility(events_file=self.__file)
+        #self.__file = str(self.__match_id) + "_MatchEventsViewModel.json"
+        self.__utility = Utility(match_id=self.__match_id)
         self.__dic = Dictionary()
 
         self.__dry_run = dry_run
@@ -34,26 +32,14 @@ class Analysis:
         self.__event_lineups_oneline = self.__utility.event_lineups_oneline()
         self.__shooting_stat_df = self.__utility.shooting_stat
         self.__non_shooting_stat_df = self.__utility.non_shooting_stat
+        self.__df_match_summary = self.__utility.get_match_summary()
 
         self.__dict_shot_result_points = self.__dic.shot_result_points
         self.__dict_shot_description = self.__dic.shot_description
 
-        # TO-DO: get name from other JSON file
-        self.__competition = competition
-
     def match_header(self):
-        now = datetime.now()
-        current_time = now.strftime("%Y-%m-%d %H:%M:%S")
-
-        home_away_team = self.__home_team + " vs " + self.__away_team
-        game_header = [
-            [self.__competition, self.__match_id, self.__home_team, self.__away_team, home_away_team, current_time]]
-        game_header_df = pd.DataFrame.from_records(game_header,
-                                                   columns=['Competition', "MatchId", "Home", "Away", "HomeAwayTeam",
-                                                            'Created'])
         folder_name = "match_header"
-        #print(game_header_df)
-        self.__save_dataframe(game_header_df, folder_name)
+        self.__save_dataframe(self.__df_match_summary, folder_name)
 
     def point_accumulation(self):
         f_made_shots = (self.__events.MatchEventType == 'Shot') & \
@@ -137,7 +123,7 @@ class Analysis:
         assist_df = assist_df.drop(['ShotResult', 'Player'], axis=1).reset_index(drop=True)
 
         folder_name = "assists"
-        print(assist_df)
+        #print(assist_df)
         self.__save_dataframe(assist_df, folder_name)
 
     def scoring(self):
