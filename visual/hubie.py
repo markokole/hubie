@@ -7,6 +7,10 @@ import dash_html_components as html
 import dash_table
 import plotly.graph_objs as go
 import warnings
+import pandas as pd
+
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', 500)
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -14,6 +18,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 class Logic:
     """
     """
+
     def __init__(self, str_match_id=7032956):
         """
         Initialize the instance of Logic object
@@ -30,27 +35,17 @@ class Logic:
         :return:
         """
         df = self.__u.load_dataframe("match_header")
+        print(df.to_dict(orient='records'))
         f_match_id = (df.MatchId == self.__match_id)
-        self.__home_team = df.loc[f_match_id]['Home'][0]
-        self.__away_team = df.loc[f_match_id]['Away'][0]
+        single_match = df.loc[f_match_id].to_dict(orient='records')[0]
+        self.__home_team = single_match['HomeTeam']
+        self.__away_team = single_match['AwayTeam']
+        home_score = single_match['Score Home']
+        away_score = single_match['Score Away']
 
-        df = df[['HomeAwayTeam', 'MatchId']]
-        self.__title = df['HomeAwayTeam'].loc[f_match_id][0]
-        return [{'label': "   " + row['HomeAwayTeam'], 'value': row['MatchId']} for idx, row in df.iterrows()]
-
-    def final_score(self):
-        """
-        :return: Final score in formatted output
-        """
-        df = self.__u.load_dataframe("player_stat")
-        f = df.MatchId == self.__match_id
-        df = df.loc[f][['HomeAway', 'Made1', 'Made2', 'Made3']]
-        df_grouped = df.groupby(['HomeAway']).sum()
-        df_grouped['Made2'] = df_grouped['Made2'] * 2
-        df_grouped['Made3'] = df_grouped['Made3'] * 3
-        df_score = df_grouped.sum(axis=1).reset_index(name='Score')['Score']
-        list_score = df_score.tolist()  # first number is Away!
-        return str(list_score[1]) + " - " + str(list_score[0])
+        self.__title = "   {} {}:{} {}".format(self.__home_team, home_score, away_score, self.__away_team)
+        return [{'label': "   {} vs {} {}:{}".format(row['HomeTeam'], row['AwayTeam'], row['Score Home'], row['Score Away']), 'value': row['MatchId']} for idx, row
+                in df.iterrows()]
 
     def __player_stats(self, home_away):
         """
@@ -121,20 +116,21 @@ class Logic:
 
         # data for accumulated graph
         accumulation_data = [go.Scatter(x=x_minutes, y=y_home, name=self.__home_team),
-                 go.Scatter(x=x_minutes, y=y_away, name=self.__away_team)]
+                             go.Scatter(x=x_minutes, y=y_away, name=self.__away_team)]
 
         # data for difference graph
-        difference_data = [{'x': x_difference_minutes_home, 'y': difference_home, 'type': 'bar', 'name': self.__home_team},
-                           {'x': x_difference_minutes_away, 'y': difference_away, 'type': 'bar', 'name': self.__away_team}]
+        difference_data = [
+            {'x': x_difference_minutes_home, 'y': difference_home, 'type': 'bar', 'name': self.__home_team},
+            {'x': x_difference_minutes_away, 'y': difference_away, 'type': 'bar', 'name': self.__away_team}]
 
         figure_cum_scoring = {"data": accumulation_data,
-                            "layout": go.Layout(yaxis={"title": "Points"},
-                                                xaxis={"title": "Minute"},
-                                                title="Scoring per minute "
-                                                )
-                            }
+                              "layout": go.Layout(yaxis={"title": "Points"},
+                                                  xaxis={"title": "Minute"},
+                                                  title="Scoring per minute "
+                                                  )
+                              }
 
-        figure_difference =  {"data": difference_data}
+        figure_difference = {"data": difference_data}
 
         _return = html.Div([dcc.Graph(id='graph-cumulative-score',
                                       figure=figure_cum_scoring),
@@ -176,7 +172,7 @@ class Logic:
                                       figure=both_figures[1],
                                       config={'staticPlot': True}
                                       )
-                           ], style={'width': '75%'})
+                            ], style={'width': '75%'})
         return _return
 
     def assist(self):
@@ -190,18 +186,18 @@ class Logic:
         df_period = df_assist['PeriodName'].unique()
 
         figure = {'data': [
-                    {'x': df_period, 'y': home_assist, 'type': 'bar', 'name': self.__home_team},
-                    {'x': df_period, 'y': away_assist, 'type': 'bar', 'name': self.__away_team},
-                ],
-                    'layout': {
-                        'title': 'Assists per period'
-                    }
+            {'x': df_period, 'y': home_assist, 'type': 'bar', 'name': self.__home_team},
+            {'x': df_period, 'y': away_assist, 'type': 'bar', 'name': self.__away_team},
+        ],
+            'layout': {
+                'title': 'Assists per period'
+            }
         }
 
         _return = html.Div([dcc.Graph(id='graph-assist',
-                            figure=figure,
-                            config={'staticPlot': True})
-                  ])
+                                      figure=figure,
+                                      config={'staticPlot': True})
+                            ])
 
         return _return
 
@@ -220,6 +216,7 @@ class Logic:
 
     def get_away_team(self):
         return self.__away_team
+
 
 logic = Logic()
 match_id = logic.get_match_id()
@@ -243,7 +240,7 @@ app.layout = html.Div([
                              )
               ], className="split left"),
     html.Div([html.H1(id="h1-title"),
-              html.H2(id="h2-score"),
+
               dcc.Tabs(id="tabs", value='scoring', children=[
                   dcc.Tab(label='Scoring', value='scoring'),
                   dcc.Tab(label='Box Score', value='box-score'),
@@ -261,7 +258,6 @@ app.layout = html.Div([
 
 @app.callback([Output(component_id='match-radio', component_property='options'),
                Output(component_id='h1-title', component_property='children'),
-               Output(component_id='h2-score', component_property='children'),
                Output('tabs-content-example', 'children')],
               [Input('tabs', 'value'),
                Input(component_id='match-radio', component_property='value')])
@@ -271,7 +267,6 @@ def render_content(tab, str_match_id):
         logic = Logic(str_match_id)
         match_header = logic.match_header()
         title = logic.get_title()
-        final_score = logic.final_score()
 
         if tab == 'scoring':
             _return = logic.cumulative_scoring_data()
@@ -284,7 +279,6 @@ def render_content(tab, str_match_id):
 
         return match_header, \
                title, \
-               final_score, \
                _return
 
 
