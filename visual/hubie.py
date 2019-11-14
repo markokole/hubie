@@ -34,8 +34,9 @@ class Logic:
         """
         :return:
         """
-        df = self.__u.load_dataframe("match_header")
-        print(df.to_dict(orient='records'))
+        df = self.__u.load_dataframe("match_header").sort_values(by='Match Date')
+
+        dict_all_headers = df.to_dict(orient='records')
         f_match_id = (df.MatchId == self.__match_id)
         single_match = df.loc[f_match_id].to_dict(orient='records')[0]
         self.__home_team = single_match['HomeTeam']
@@ -44,17 +45,24 @@ class Logic:
         away_score = single_match['Score Away']
 
         self.__title = "   {} {}:{} {}".format(self.__home_team, home_score, away_score, self.__away_team)
-        return [{'label': "   {} vs {} {}:{}".format(row['HomeTeam'], row['AwayTeam'], row['Score Home'], row['Score Away']), 'value': row['MatchId']} for idx, row
-                in df.iterrows()]
+
+        all_game_headers = [{'label': "   {}: {} {}:{} {}".format(row['Short Date'], row['HomeTeam'], row['Score Home'],
+                                                                  row['Score Away'], row['AwayTeam']),
+                             'value': row['MatchId']}
+                            for row in dict_all_headers]
+
+        return all_game_headers
 
     def __player_stats(self, home_away):
         """
         :param home_away:
-        :param str_match_id:
         :return:
         """
-        df = self.__u.load_dataframe("player_stat")
-        df = df.loc[(df.HomeAway == home_away) & (df.MatchId == self.__match_id)]
+        df_all = self.__u.load_dataframe("player_stat")
+        print(df_all.columns)
+        f_team = (df_all.HomeAway == home_away) & (df_all.MatchId == self.__match_id)
+        df = df_all.loc[f_team]
+
         if home_away == 'Home':
             table_title = self.__home_team
             h3_id = 'h3-home-table'
@@ -64,17 +72,50 @@ class Logic:
             h3_id = 'h3-away-table'
             table_id = 'stats-away-table'
 
-        cols = ['PlayerName', 'Point', 'Foul', 'Made1', 'Missed1', 'Made2', 'Missed2', 'Made3', 'Missed3']
-        cols += ['OffensiveRebound', 'DefensiveRebound', 'Assist', 'Turnover', 'Steal', 'Block', 'Efficiency']
-        df = df[cols]
+        # define columns to display and correct order
+        columns = ['Player', 'Points', '2FGM', '2FGA', '3FGM', '3FGA', 'FTM', 'FTA']
+        columns = columns + ['D.Reb', 'O.Reb', 'T.Reb', 'As', 'St', 'To', 'Bl', 'Fl', 'Efficiency']
 
-        cols = [{"name": i, "id": i} for i in df.columns]
-        df_records = df.to_dict("records")
+        cols = [{"name": c, "id": c} for c in columns]
+        df_records = df[columns].to_dict("records")
+
+        # conditional formatting
+        max_eff = df_all.loc[f_team]['Efficiency'].agg(['max']).to_dict()['max']
+        max_points = df_all.loc[f_team]['Points'].agg(['max']).to_dict()['max']
+        dict_if_eff_max = {'column_id': 'Efficiency', 'filter_query': '{Efficiency} eq ' + str(max_eff)}
+        dict_if_eff_min = {'column_id': 'Efficiency', 'filter_query': '{Efficiency} < 0'}
+        dict_if_pts_max = {'column_id': 'Points', 'filter_query': '{Points} eq ' + str(max_points)}
 
         _return = html.Div([html.H3(table_title, id=h3_id),
                             html.Div(dash_table.DataTable(id=table_id,
                                                           columns=cols,
-                                                          data=df_records
+                                                          data=df_records,
+                                                          style_data_conditional=[
+                                                              {
+                                                                  'if': {'row_index': 'odd'},
+                                                                  'backgroundColor': 'rgb(248, 248, 248)'
+                                                              },
+                                                              {
+                                                                  'if': {'column_id': 'Efficiency'},
+                                                                  'backgroundColor': 'rgb(230, 230, 230)'
+                                                              },
+                                                              {
+                                                                  'if': dict_if_eff_max,
+                                                                  'backgroundColor': 'green'
+                                                              },
+                                                              {
+                                                                  'if': dict_if_eff_min,
+                                                                  'color': 'red'
+                                                              },
+                                                              {
+                                                                  'if': dict_if_pts_max,
+                                                                  'color': 'green'
+                                                              }
+                                                          ],
+                                                          style_header={
+                                                              'backgroundColor': 'rgb(230, 230, 230)',
+                                                              'fontWeight': 'bold'
+                                                          }
                                                           )
                                      )
                             ])
@@ -89,6 +130,8 @@ class Logic:
         for ha in ['Home', 'Away']:
             div = self.__player_stats(ha)
             list_div.append(div)
+
+        df = self.__u.load_dataframe("player_stat")
 
         _return = html.Div([list_div[0], list_div[1]])
         return _return
@@ -150,6 +193,9 @@ class Logic:
         f_away = (df.HomeAway == 'Away')
         df_home = df.loc[f_home][['PlayerName', 'Efficiency']].sort_values(by=['Efficiency'])
         df_away = df.loc[f_away][['PlayerName', 'Efficiency']].sort_values(by=['Efficiency'])
+        dict_min_max = df['Efficiency'].agg(['min', 'max']).to_dict()
+        min_eff = dict_min_max['min']
+        max_eff = dict_min_max['max']
         teams = [self.__home_team, self.__away_team]
         both_figures = []
         for idx, df in enumerate([df_home, df_away]):
@@ -159,18 +205,18 @@ class Logic:
                                 orientation='h')],
                 'layout': go.Layout(
                     title=teams[idx],
-                    xaxis={'title': 'Efficiency'},
-                    margin={'l': 200, 'b': 60, 't': 30, 'r': 20}
+                    xaxis={'title': 'Efficiency', 'range': [min_eff, max_eff]},
+                    margin={'l': 200, 'b': 60, 't': 30, 'r': 20},
                 )
             }
             both_figures.append(figure)
         _return = html.Div([dcc.Graph(id='graph-cumulative-score-home',
-                                      figure=both_figures[0],
-                                      config={'staticPlot': True}
+                                      figure=both_figures[0]
+                                      # config={'staticPlot': True}
                                       ),
                             dcc.Graph(id='graph-cumulative-score-away',
-                                      figure=both_figures[1],
-                                      config={'staticPlot': True}
+                                      figure=both_figures[1]
+                                      # config={'staticPlot': True}
                                       )
                             ], style={'width': '75%'})
         return _return
