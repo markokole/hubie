@@ -24,6 +24,41 @@ class Utility:
         if self.__match_id > 0:
             self.__parse_events_file()
 
+    def __parse_summary_file(self):
+        """
+        Method returns a DataFrame because it takes in a JSON file with metadata about a match
+        :return:
+        """
+        print("Processing summary file: {}".format(self.__path_staging_in + self.__summary_file))
+        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + self.__summary_file)
+        body = obj.get()['Body'].read().decode("utf-8")
+        data_summary = json.loads(body)
+        now = datetime.now()
+        current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        self.__tournament = data_summary['Tournament']
+        self.__home_team = data_summary['HomeTeam']
+        self.__away_team = data_summary['AwayTeam']
+        self.__score_home = data_summary['HomeGoals']
+        self.__score_away = data_summary['AwayGoals']
+        match_date = data_summary['Date'][:10] # get only date
+        short_date = match_date[-2:] + "." + match_date[-5:-3] + "." + match_date[2:4]
+        self.__periods = data_summary['Periods']
+        self.__period_score_home = []
+        self.__period_score_away = []
+
+        for i in range(len(self.__periods)):
+            self.__period_score_home.append(self.__periods[i]['HomeGoals'])
+            self.__period_score_away.append(self.__periods[i]['AwayGoals'])
+
+        match_summary = [[self.__tournament, self.__match_id, self.__home_team, self.__away_team, match_date, short_date,
+                          self.__score_home, self.__score_away, self.__period_score_home, self.__period_score_away, current_time]]
+
+        columns = ['Tournament', 'MatchId', 'HomeTeam', 'AwayTeam', 'Match Date', 'Short Date', 'Score Home', 'Score Away', 'Period Score Home', 'Period Score Away', 'CreatedTime']
+        df = pd.DataFrame(data=match_summary, columns=columns)
+
+        return df
+
     def __parse_events_file(self):
         """
         :return:
@@ -41,41 +76,6 @@ class Utility:
         self.non_shooting_stat = self.__non_shooting_stat()
         self.players_all_playtimes = self.__players_all_playtimes()
         self.event_lineups = self.__event_lineups()
-
-    def __parse_summary_file(self):
-        """
-        Method returns a DataFrame because it takes in a JSON file with metadata about a match
-        :return:
-        """
-        print("Processing summary file: {}".format(self.__path_staging_in + self.__summary_file))
-        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + self.__summary_file)
-        body = obj.get()['Body'].read().decode("utf-8")
-        data_summary = json.loads(body)
-        now = datetime.now()
-        current_time = now.strftime("%Y-%m-%d %H:%M:%S")
-
-        #print(data_summary)
-        self.__tournament = data_summary['Tournament']
-        self.__home_team = data_summary['HomeTeam']
-        self.__away_team = data_summary['AwayTeam']
-        self.__score_home = data_summary['HomeGoals']
-        self.__score_away = data_summary['AwayGoals']
-        self.__match_date = data_summary['Date'][:10] # get only date
-        self.__periods = data_summary['Periods']
-        self.__period_score_home = []
-        self.__period_score_away = []
-
-        for i in range(len(self.__periods)):
-            self.__period_score_home.append(self.__periods[i]['HomeGoals'])
-            self.__period_score_away.append(self.__periods[i]['AwayGoals'])
-
-        match_summary = [[self.__tournament, self.__match_id, self.__home_team, self.__away_team, self.__match_date, self.__score_home, self.__score_away,
-                          self.__period_score_home, self.__period_score_away, current_time]]
-
-        columns = ['Tournament', 'MatchId', 'HomeTeam', 'AwayTeam', 'Match Date', 'Score Home', 'Score Away', 'Period Score Home', 'Period Score Away', 'CreatedTime']
-        df = pd.DataFrame(data=match_summary, columns=columns)
-
-        return df
 
 ######
 ## Load DataFrames
@@ -164,11 +164,9 @@ class Utility:
     def __players_all_playtimes(self):
         """
         Method calculates each player's time on the floor - every time interval the player is on the floor
-        
         Return: DataFrame with following columns: HomeAway Player In Out PlayTime
         """
         global_sub_inout = pd.DataFrame() # all substitutions - one per row
-        global_play_interval = pd.DataFrame() # all substitutions - in&out per row
         global_play_interval_list = []
         
         list_player_ids = self.dict_player_fullname() # unique players' IDs and full name
@@ -178,7 +176,7 @@ class Utility:
             filter_substitution = (self.events.MatchEventType == 'Substitution') \
                                 & ((self.events.PlayerIn == player_id) | (self.events.PlayerOut == player_id))
             sub_player = self.events[['Minute', 'PlayerIn', 'PlayerOut', 'HomeAway']].loc[filter_substitution]
-
+            home_away = "NOTEAM"
             if not sub_player.empty: # needed in case player was on the roster but didnt play
 
                 # add time delta from previous row
@@ -231,7 +229,6 @@ class Utility:
         global_play_interval = pd.DataFrame.from_records(global_play_interval_list, columns=['HomeAway', 'Player', 'In', 'Out'])
         global_play_interval['PlayTime'] = global_play_interval.Out - global_play_interval.In
         global_play_interval['MatchId'] = self.__match_id
-        
         return global_play_interval
     
     
