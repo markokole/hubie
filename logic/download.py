@@ -20,7 +20,7 @@ class Download:
         Converts special characters to norwegian letters
         """
         rep = {"&#248;": "ø",
-               "\u00f8y": "ø",
+               "\u00f8": "ø",
                "&#229;": "å",
                "Ã¸": 'ø',
                "Ã˜": "Ø",
