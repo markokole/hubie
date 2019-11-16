@@ -10,7 +10,6 @@ class Analysis:
     """
     dry_run: if True, do not write to S3
     """
-
     def __init__(self, match_id, dry_run=True):
 
         self.__match_id = match_id
@@ -27,9 +26,9 @@ class Analysis:
         self.__dict_teams = self.__utility.dict_team_names()
         self.__dict_id_player = self.__utility.dict_player_fullname()
         self.__playtime_df = self.__utility.players_all_playtimes
-        self.__dict_player_starter = self.__utility.dict_is_playerid_starter()
-        self.__event_lineups = self.__utility.event_lineups
-        self.__event_lineups_oneline = self.__utility.event_lineups_oneline()
+        self.dict_starters = self.__utility.dict_starters
+        # self.__event_lineups = self.__utility.event_lineups
+        # self.__event_lineups_oneline = self.__utility.event_lineups_oneline()
         self.__shooting_stat_df = self.__utility.shooting_stat
         self.__non_shooting_stat_df = self.__utility.non_shooting_stat
         self.__df_match_summary = self.__utility.get_match_summary()
@@ -39,7 +38,6 @@ class Analysis:
 
     def match_header(self):
         folder_name = "match_header"
-        # print(self.__df_match_summary)
         self.__save_dataframe(self.__df_match_summary, folder_name)
 
     def point_accumulation(self):
@@ -112,9 +110,14 @@ class Analysis:
         self.__save_dataframe(cum_score_df, folder_name)
 
     def assist(self):
+        """
+
+        :return:
+        """
         f_assist = (self.__events.Assist != 0)
         columns = ['Assist', 'PeriodName', 'Player', 'ShotResult', 'HomeAway', 'MinuteRound']
         assist_df = self.__events.loc[f_assist][columns]
+        assist_df['PlayerId'] = assist_df.Assist
         assist_df['Assist'] = assist_df.Assist.replace(self.__dict_id_player)
         assist_df['Scorer'] = assist_df.Player.replace(self.__dict_id_player)
         assist_df['Point'] = assist_df.ShotResult.replace(self.__dict_shot_result_points)
@@ -124,8 +127,8 @@ class Analysis:
         assist_df = assist_df.drop(['ShotResult', 'Player'], axis=1).reset_index(drop=True)
 
         folder_name = "assists"
-        # print(assist_df)
         self.__save_dataframe(assist_df, folder_name)
+        return assist_df
 
     def scoring(self):
         """
@@ -142,7 +145,7 @@ class Analysis:
         df['MinuteRound'] = df.MinuteRound.dt.strftime('%M-%s')
         df['MatchId'] = self.__match_id
 
-        # print(df.head(10))
+        print(df.head(10))
         folder_name = "scoring"
         self.__save_dataframe(df, folder_name)
 
@@ -153,7 +156,6 @@ class Analysis:
         - (Missed Field Goals + Missed Free Throws + Turnovers + Shots Rejected + Fouls Committed)
         'Fouls Drawn' and 'Shots Rejected' are not in the equation since they are not registered in the play-by-play data
         """
-
         shooting_stat_df = self.__shooting_stat_df.drop(['PlayerName', 'Team'], axis=1)
         shooting_stat_df['Point'] = (shooting_stat_df.Made1 * 1) + (shooting_stat_df.Made2 * 2) + (
                     shooting_stat_df.Made3 * 3)
@@ -165,12 +167,12 @@ class Analysis:
         shooting_stat_df['3FGA'] = shooting_stat_df.Missed3 + shooting_stat_df.Made3
 
         non_shooting_stat_df = self.__non_shooting_stat_df
-        non_shooting_stat_df['T.Reb'] = non_shooting_stat_df.DefensiveRebound + non_shooting_stat_df.OffensiveRebound
+        non_shooting_stat_df['REB'] = non_shooting_stat_df.DefensiveRebound + non_shooting_stat_df.OffensiveRebound
 
         all_stat_df = pd.DataFrame.merge(shooting_stat_df, non_shooting_stat_df, on=['Player', 'MatchId'])
 
         all_stat_df['Efficiency'] = (all_stat_df.Point +
-                                     all_stat_df['T.Reb'] +
+                                     all_stat_df['REB'] +
                                      all_stat_df.Assist +
                                      all_stat_df.Steal +
                                      all_stat_df.Block) - \
@@ -182,25 +184,31 @@ class Analysis:
         reverse_dict_teams = {value: key for key, value in self.__dict_teams.items()}
         all_stat_df['HomeAway'] = all_stat_df.Team.replace(reverse_dict_teams)
 
+        # starters are read from a dictionary and get a star (*) in front of their name
+        # all_stat_df.loc[all_stat_df.Player.isin(self.__dict_starters), 'Starter'] = '*'
+        # all_stat_df.loc[~all_stat_df.Player.isin(self.__dict_starters), 'Starter'] = ''
+        all_stat_df['Starter'] = all_stat_df['Player'].replace(self.__dict_starters).replace({'Y': '*', 'N': ''})
+        all_stat_df['PlayerName'] = all_stat_df.Starter + all_stat_df['PlayerName']
         all_stat_df = all_stat_df.rename(columns={'Player': 'PlayerId',
                                                   'PlayerName': 'Player',
                                                   'Point': 'Points',
-                                                  'Block': 'Bl',
-                                                  'Assist': 'As',
-                                                  'Turnover': 'To',
-                                                  'Foul': 'Fl',
-                                                  'Steal': 'St',
+                                                  'Block': 'BLK',
+                                                  'Assist': 'AST',
+                                                  'Turnover': 'TOV',
+                                                  'Foul': 'FLS',
+                                                  'Steal': 'STL',
                                                   'Made1': 'FTM',
                                                   'Made2': '2FGM',
                                                   'Made3': '3FGM',
-                                                  'DefensiveRebound': 'D.Reb',
-                                                  'OffensiveRebound': 'O.Reb'})
+                                                  'DefensiveRebound': 'DREB',
+                                                  'OffensiveRebound': 'OREB'})
 
         columns = ['MatchId', 'PlayerId', 'HomeAway', 'Player', 'Points', '2FGM', '2FGA', '3FGM', '3FGA', 'FTM', 'FTA']
-        columns = columns + ['D.Reb', 'O.Reb', 'T.Reb', 'As', 'St', 'To', 'Bl', 'Fl', 'Efficiency']
+        columns = columns + ['DREB', 'OREB', 'REB', 'AST', 'STL', 'TOV', 'BLK', 'FLS', 'Efficiency']
         all_stat_df = all_stat_df[columns]
         folder_name = "player_stat"
         self.__save_dataframe(all_stat_df, folder_name)
+        #return all_stat_df
 
     def team_fouls_per_period(self):
 
@@ -253,6 +261,11 @@ class Analysis:
     def get_away_team(self):
         return self.__away_team
 
+    def get_playtime(self):
+        return self.__playtime_df
+
+    def get_starters(self):
+        return self.__dict_player_starter
     ######
     ## Save
     ######
