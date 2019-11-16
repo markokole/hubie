@@ -20,6 +20,7 @@ class Utility:
         self.__path_staging_in = "blno/STAGING_IN/"
         self.__path_historical_files = 'blno/HISTORICAL_FILES/'
         self.__bucket = self.__s3.Bucket(self.__bucket_name)
+        #self.dict_starters = ""
 
         if self.__match_id > 0:
             self.__parse_events_file()
@@ -74,29 +75,23 @@ class Utility:
         self.roster = self.__roster()
         self.shooting_stat = self.__shooting_stat()
         self.non_shooting_stat = self.__non_shooting_stat()
-        self.players_all_playtimes = self.__players_all_playtimes()
-        self.event_lineups = self.__event_lineups()
+        self.dict_starters, self.players_all_playtimes = self.__players_all_playtimes()
+#        self.event_lineups = self.__event_lineups()
 
 ######
 ## Load DataFrames
 ###### 
 
     def load_dataframe(self, name):
-        #s3_resource = boto3.resource('s3')
-        #bucket_name = "hubie"
         self.__name = name
         path = "blno/" + self.__name
-        #bucket = s3_resource.Bucket(bucket_name)
         df = pd.DataFrame()
         for obj in self.__bucket.objects.filter(Prefix=path):
             file_name = obj.key
             if file_name.find('json') != -1:
-                #print(file_name)
                 obj = self.__s3.Object(self.__bucket_name, file_name)
                 body = obj.get()['Body'].read()
-                #print(body)
                 df_tmp = pd.read_json(body, lines=True)
-                #print(df_tmp)
                 df = df.append(df_tmp)
         
         return df
@@ -121,25 +116,20 @@ class Utility:
         players_full = players_full.loc[players_full.ShirtNo.notnull()] # SihrtNo=None is coaching staff
 
         return players_full
-    
-    
+
     def __event(self):
         """
         """
         events = pd.DataFrame(self.__data['Events']).fillna(0) # text replacement
-                
         events = events.loc[events.PeriodTime != ''] # remove rows with no time
-        
         events['PeriodName'] = events['PeriodName'].str.replace('. periode', '') # remove .periode
-        # events['Team'] = events['Team'].str.replace('B', 'Away') #change norwegian B (Borte) with english A (Away)
-        events['Team'] = events['Team'].replace({'B': 'Away', 'H': 'Home'})
+        events['Team'] = events['Team'].replace({'B': 'Away', 'H': 'Home'}) #change norwegian B (Borte) with english A (Away)
         
         # type conversion
         convert_cols = ['Assist', 'Player', 'PlayerIn', 'PlayerOut', 'ShotResult', 'PeriodName', 'FoulType']
         events[convert_cols] = events[convert_cols].apply(lambda x: x.astype('int32'))
 
         #format PeriodTime column
-        #events['OriginalPeriodTime'] = events['PeriodTime']
         events['PeriodTime'] = pd.to_datetime(events.PeriodTime, format='%M:%S')
         events = events.rename(columns={'Team': 'HomeAway'})
 
@@ -159,79 +149,77 @@ class Utility:
 
         self.events = events
         return self.events
-    
-    
+
     def __players_all_playtimes(self):
         """
         Method calculates each player's time on the floor - every time interval the player is on the floor
         Return: DataFrame with following columns: HomeAway Player In Out PlayTime
         """
-        global_sub_inout = pd.DataFrame() # all substitutions - one per row
-        global_play_interval_list = []
-        
-        list_player_ids = self.dict_player_fullname() # unique players' IDs and full name
-        for player_id in list_player_ids.keys():
+        events = self.events
+        dict_players = self.dict_player_fullname()
+        #dict_player_team = self.dict_player_team()
 
-            # get rows where player was involved in a substitution
-            filter_substitution = (self.events.MatchEventType == 'Substitution') \
-                                & ((self.events.PlayerIn == player_id) | (self.events.PlayerOut == player_id))
-            sub_player = self.events[['Minute', 'PlayerIn', 'PlayerOut', 'HomeAway']].loc[filter_substitution]
-            home_away = "NOTEAM"
-            if not sub_player.empty: # needed in case player was on the roster but didnt play
+        #cols = ['PlayerIn', 'PlayerOut', 'Minute']
+        df_subs = events.loc[events.MatchEventType == 'Substitution']
 
-                # add time delta from previous row
-                sub_player['Difference'] = np.where(sub_player.HomeAway == sub_player.HomeAway.shift(), sub_player.Minute - sub_player.Minute.shift(), np.nan)
+        first_second = [pd.to_datetime('1900-01-01 00:00:00')]
+        last_second = [pd.to_datetime('1900-01-01 00:40:00')]
+        playing_time = []
+        dict_starters = {}
 
-                # put PlayerIn and PlayerOut columns into one column and create an InOut column
-                sub_in = sub_player[['PlayerIn', 'Minute', 'HomeAway']]
-                sub_in = sub_in.rename(columns={"PlayerIn": "Player"})
-                sub_in['InOut'] = 'In'
+        for player_id, name in dict_players.items():
+            in_out = []
+            list_minutes = []
+            list_playing_time = []
+            f_sub = (df_subs.PlayerIn == player_id) | (df_subs.PlayerOut == player_id)
+            df_subs_player = df_subs.loc[f_sub].reset_index(drop=True)
 
-                sub_out = sub_player[['PlayerOut', 'Minute', 'HomeAway']]
-                sub_out = sub_out.rename(columns={"PlayerOut": "Player"})
-                sub_out['InOut'] = 'Out'
+            if not df_subs_player.empty:  # only players that were substituted.
+                for idx in range(len(df_subs_player)):
+                    row = df_subs_player.iloc[idx]
+                    list_minutes.append(row['Minute'])
+                    if row['PlayerIn'] == player_id:
+                        in_out.append('in')
+                    if row['PlayerOut'] == player_id:
+                        in_out.append('out')
 
-                sub_inout = sub_in.append(sub_out, ignore_index=True) # append together In and Out dataframes
-                sub_inout = sub_inout.loc[sub_inout.Player == player_id] # take out only rows with player_id in question
+                # if starter add first_second at the beginning
+                if in_out[0] == 'out':
+                    in_out = ['in'] + in_out
+                    list_minutes = first_second + list_minutes
+                    dict_starters[player_id] =  'Y'
+                else:
+                    dict_starters[player_id] =  'N'
 
-                sub_inout = sub_inout.sort_values(['Minute']) # sort by minutes - needed to check what first and last row status is
-                sub_inout.index = range(len(sub_inout)) # recreate index
+                # if finished game add last_second at the end
+                if in_out[-1] == 'in':
+                    in_out = in_out + ['out']
+                    list_minutes = list_minutes + last_second
 
-                home_away = sub_inout.loc[sub_inout.Player == player_id]['HomeAway'][0]
+                for idx in range(len(in_out) - 1, 0, -2):  # go backwards and loop only through 'out' values
+                    delta_time = list_minutes[idx] - list_minutes[idx - 1]
+                    list_playing_time.append(delta_time)
+                    playing_time.append(
+                        {'player_id': player_id, 'in': list_minutes[idx-1], 'out': list_minutes[idx]})
 
-                # if last row is In, means player finished the game
-                last_in = list(sub_inout[-1:]['InOut'].isin(['In']))[0]
-                if last_in == True:
-                    last_row = pd.DataFrame([[home_away, pd.to_datetime('1900-01-01 00:40:00'), player_id, 'Out']], columns=['HomeAway', 'Minute', 'Player', 'InOut'])
-                    sub_inout = sub_inout.append(last_row, ignore_index=True)
+        list_players_in_sub = df_subs.PlayerIn.tolist() + df_subs.PlayerOut.tolist() # all players in substitution
+        all_players = dict_players.keys() # all players
+        not_in_sub = all_players - list_players_in_sub  # players not in substitution column
 
-                # if first row is Out, means player started the game
-                first_out = list(sub_inout[:1]['InOut'].isin(['Out']))[0]
-                if first_out == True:
-                    #starter = 'Y'
-                    first_row = pd.DataFrame([[home_away, pd.to_datetime('1900-01-01 00:00:00'), player_id, 'In']], columns=['HomeAway', 'Minute', 'Player', 'InOut'])
-                    sub_inout = sub_inout.append(first_row, ignore_index=True)        
+        for player_id in not_in_sub:
+            _count = events['Player'].loc[events.Player.isin([player_id])].count()
+            if _count > 0:  # player played all game
+                playing_time.append({'player_id': player_id, 'in': pd.to_datetime(first_second[0]), 'out': pd.to_datetime(last_second[0])})
+            else:  # player didnt play
+                playing_time.append({'player_id': player_id, 'in': pd.to_datetime(first_second[0]), 'out': pd.to_datetime(first_second[0])})
 
-                sub_inout = sub_inout.sort_values(['Minute'])
-                sub_inout.index = range(len(sub_inout))
-                global_sub_inout = global_sub_inout.append(sub_inout)
+        df_play_time = pd.DataFrame.from_records(playing_time)
+        df_play_time.columns = ['In', 'Out', 'Player']
+        df_play_time['PlayTime'] = df_play_time.Out - df_play_time.In
+        df_play_time['MatchId'] = self.__match_id
+        df_play_time = df_play_time[['MatchId', 'Player', 'In', 'Out', 'PlayTime']]
+        return dict_starters, df_play_time
 
-                # calculate playing time
-                play_time = list()
-                for i in range(len(sub_inout)): # loop thorugh all Substitutions
-
-                    if sub_inout.iloc[i]['InOut'] == 'Out':
-                        global_play_interval_list.append([home_away, player_id, sub_inout.iloc[i-1]['Minute'], sub_inout.iloc[i]['Minute']])
-
-            else: # player didnt play
-                global_play_interval_list.append([home_away, player_id, pd.to_datetime('NaT'), pd.to_datetime('NaT')])
-
-        global_play_interval = pd.DataFrame.from_records(global_play_interval_list, columns=['HomeAway', 'Player', 'In', 'Out'])
-        global_play_interval['PlayTime'] = global_play_interval.Out - global_play_interval.In
-        global_play_interval['MatchId'] = self.__match_id
-        return global_play_interval
-    
-    
     def __event_lineups(self):
         """
         Calculates the lineups for home and away teams at each registered event
@@ -240,8 +228,9 @@ class Utility:
         list_events_minutes = self.events.Minute.loc[self.events.MatchEventType != 'Substitution'].unique()
         list_lineups_at_event = []
         playtime_df = self.players_all_playtimes
-
+        print(self.events.dtypes)
         for t in list_events_minutes:
+            print(playtime_df.dtypes)
             f = (playtime_df.In < t) & \
                 (playtime_df.Out >= t)
 
@@ -254,7 +243,6 @@ class Utility:
             list_lineups_at_event.append(dict_home_lineup)
             list_lineups_at_event.append(dict_away_lineup)
 
-
             list_events_players = []
             for line in list_lineups_at_event:
                 for player_id in line['Lineup']:
@@ -263,7 +251,6 @@ class Utility:
 
         event_lineups_df = pd.DataFrame.from_records(list_events_players)
         event_lineups_df['MatchId'] = self.__match_id
-        
         return event_lineups_df
     
     def event_lineups_oneline(self):
@@ -279,11 +266,9 @@ class Utility:
 
                 row = {"Minute": pd.to_datetime(minute), "Lineup": str_event_lineup, "HomeAway": ha}
                 list_all_rows.append(row)
-
         df_lineup_event = pd.DataFrame.from_records(list_all_rows)
 
         return df_lineup_event
-
 
     def __shooting_stat(self):
         """
@@ -313,8 +298,7 @@ class Utility:
         shot_df['Team'] = shot_df.Player.replace(self.dict_player_team())
         shot_df['MatchId'] = self.__match_id
         return shot_df
-        
-    
+
     def __assist_stat(self):
         """
         Return DataFrame with Player Id and sum of all assists
@@ -335,10 +319,8 @@ class Utility:
             list_assist.append(assist)
 
         assist_df = pd.DataFrame.from_records(list_assist, columns=['Player', 'Assist'])
-
         return assist_df
-    
-    
+
     def __foul_stat(self):
         """
         Return DataFrame with Player Id and sum of all fouls
@@ -352,17 +334,15 @@ class Utility:
         for player_id in self.dict_player_fullname().keys():
             no_fouls = 0
             f = (df.Player == player_id)
-            if (f.sum() == 1):
+            if f.sum() == 1:
                 no_fouls = (list(df.loc[f]['FoulType'])[0])
                 
             foul = [player_id, no_fouls]
             list_foul.append(foul)
 
         foul_df = pd.DataFrame.from_records(list_foul, columns=['Player', 'Foul'])
-
         return foul_df
-    
-    
+
     def __non_shooting_stat(self):
         """
         """
@@ -430,7 +410,7 @@ class Utility:
     def dict_team_names(self):
         return {"Home": self.home_team, "Away": self.away_team}
     
-    def dict_player_fullname(self):    
+    def dict_player_fullname(self):
         player_full_df = self.roster
         player_fullname_df = pd.DataFrame(player_full_df.FirstName + ' ' + player_full_df.LastName, columns=['FullName'])
         player_fullname_df.index = player_full_df.Id
@@ -444,19 +424,9 @@ class Utility:
         player_team_df.column = ['Team']
         dict_player_team = player_team_df.to_dict()
         return dict_player_team
-    
-    def dict_is_playerid_starter(self):
-        dict_player_starter = self.players_all_playtimes[['Player', 'In']] \
-                        .groupby(['Player']) \
-                        .min()['In'] \
-                        .apply(lambda x: 'Y' if x == pd.to_datetime('1900-01-01 00:00:00') else 'N') \
-                        .to_dict()
 
-        return dict_player_starter
-    
-    
 ######
-## Save to S3
+# Save to S3
 ######
     
     def save_dataframe_s3(self, df, folder):
@@ -464,7 +434,6 @@ class Utility:
         s3_resource = boto3.resource('s3')
         bucket_name = 'hubie'
         json_data = df.to_json(force_ascii=False, date_format='iso', orient='records', lines=True)
-        
 
         s3object = s3_resource.Object(bucket_name, competition + str(self.__match_id) + '.json')
 
