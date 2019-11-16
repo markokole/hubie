@@ -25,7 +25,7 @@ class Logic:
         :param str_match_id: id of the match that is being visualized
         """
         self.__match_id = int(str_match_id)
-        self.__u = Utility()
+        self.__u = Utility(self.__match_id)
         self.__title = ""
         self.__home_team = ""
         self.__away_team = ""
@@ -74,7 +74,7 @@ class Logic:
 
         # define columns to display and correct order
         columns = ['Player', 'Points', '2FGM', '2FGA', '3FGM', '3FGA', 'FTM', 'FTA']
-        columns = columns + ['D.Reb', 'O.Reb', 'T.Reb', 'As', 'St', 'To', 'Bl', 'Fl', 'Efficiency']
+        columns = columns + ['DREB', 'OREB', 'REB', 'AST', 'STL', 'TOV', 'BLK', 'FLS', 'Efficiency']
 
         cols = [{"name": c, "id": c} for c in columns]
         df_records = df[columns].to_dict("records")
@@ -110,6 +110,15 @@ class Logic:
                                                               {
                                                                   'if': dict_if_pts_max,
                                                                   'color': 'green'
+                                                              },
+                                                              {
+                                                                  'if': {'column_id': 'Player'},
+                                                                  'textAlign': 'left',
+                                                                  'width': '200'
+                                                              },
+                                                              {
+                                                                  'if': {'column_id': 'Player'},
+                                                                  'width': '300px'
                                                               }
                                                           ],
                                                           style_header={
@@ -191,8 +200,8 @@ class Logic:
         df = df.loc[(df.MatchId == self.__match_id)]
         f_home = (df.HomeAway == 'Home')
         f_away = (df.HomeAway == 'Away')
-        df_home = df.loc[f_home][['PlayerName', 'Efficiency']].sort_values(by=['Efficiency'])
-        df_away = df.loc[f_away][['PlayerName', 'Efficiency']].sort_values(by=['Efficiency'])
+        df_home = df.loc[f_home][['Player', 'Efficiency']].sort_values(by=['Efficiency'])
+        df_away = df.loc[f_away][['Player', 'Efficiency']].sort_values(by=['Efficiency'])
         dict_min_max = df['Efficiency'].agg(['min', 'max']).to_dict()
         min_eff = dict_min_max['min']
         max_eff = dict_min_max['max']
@@ -201,7 +210,7 @@ class Logic:
         for idx, df in enumerate([df_home, df_away]):
             figure = {
                 'data': [go.Bar(x=df['Efficiency'],
-                                y=df['PlayerName'],
+                                y=df['Player'],
                                 orientation='h')],
                 'layout': go.Layout(
                     title=teams[idx],
@@ -210,15 +219,13 @@ class Logic:
                 )
             }
             both_figures.append(figure)
-        _return = html.Div([dcc.Graph(id='graph-cumulative-score-home',
-                                      figure=both_figures[0]
-                                      # config={'staticPlot': True}
-                                      ),
-                            dcc.Graph(id='graph-cumulative-score-away',
-                                      figure=both_figures[1]
-                                      # config={'staticPlot': True}
-                                      )
-                            ], style={'width': '75%'})
+        _return = html.Div([html.Tr([html.Th(dcc.Graph(id='graph-cumulative-score-home',
+                                                       figure=both_figures[0]
+                                                       )),
+                                     html.Th(dcc.Graph(id='graph-cumulative-score-away',
+                                                       figure=both_figures[1]
+                                                       ))])
+                            ])
         return _return
 
     def assist(self):
@@ -235,14 +242,50 @@ class Logic:
             {'x': df_period, 'y': home_assist, 'type': 'bar', 'name': self.__home_team},
             {'x': df_period, 'y': away_assist, 'type': 'bar', 'name': self.__away_team},
         ],
-            'layout': {
-                'title': 'Assists per period'
-            }
+            'layout': go.Layout(
+                title='Assists per period',
+                xaxis={'title': 'Period'}
+            )
         }
 
-        _return = html.Div([dcc.Graph(id='graph-assist',
-                                      figure=figure,
-                                      config={'staticPlot': True})
+        # assist per team per starter/non starter
+        df = df[['PlayerId', 'Assist', 'Team', 'HomeAway', 'MatchId']].loc[df.MatchId == self.__match_id]
+        df_count = df.groupby(['PlayerId', 'Assist', 'Team', 'HomeAway']).count().reset_index()
+        df_count = df_count.rename(columns={'MatchId': 'NoAssists'})
+        df_count['Starter'] = df_count['PlayerId'].replace(self.__u.dict_starters)
+        df_count = df_count[['Team', 'HomeAway', 'Starter', 'NoAssists']]
+
+        df_count = df_count.groupby(['Team', 'HomeAway', 'Starter']).sum().reset_index()
+        print(df_count)
+        x_axis = df_count.Team.unique()
+        y_trace1 = df_count.loc[df_count.Starter == 'Y']['NoAssists'].tolist()
+        name_trace1 = "Starters"
+        y_trace2 = df_count.loc[df_count.Starter == 'N']['NoAssists'].tolist()
+        name_trace2 = "Bench"
+        trace1 = go.Bar(
+            x=x_axis,
+            y=y_trace1,
+            name=name_trace1
+        )
+        trace2 = go.Bar(
+            x=x_axis,
+            y=y_trace2,
+            name=name_trace2
+        )
+
+        figure2 = {'data': [trace1, trace2],
+                   'layout': go.Layout(
+                       title='Assist distribution between starters and bench',
+                       xaxis={'title': 'Team'},
+                       barmode="stack"
+                   )
+                   }
+
+        _return = html.Div([html.Tr([html.Th(dcc.Graph(id='graph-assist',
+                                                       figure=figure
+                                                       # config={'staticPlot': True}
+                                                       )), html.Th(dcc.Graph(id='stack-graph-assist',
+                                                                             figure=figure2))])
                             ])
 
         return _return
