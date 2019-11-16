@@ -11,7 +11,7 @@ h1, h2, h3, h4, h5, h6 {
     //height: 300px;
     position: relative;
     display: inline-block;
-    //float: top;
+    float: center;
     padding: 7px 10px 5px 30px;
     ////margin-right: 100px;
     ////text-decoration: none;
@@ -37,4 +37,17 @@ h1, h2, h3, h4, h5, h6 {
 .right {
   right: 0;
   background-color: white;
+}
+
+table {
+  font-family: arial, sans-serif;
+  border-collapse: collapse;
+  width: 130%;
+}
+
+td, th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  //padding: 80px;
+  width: 500px;
 }
