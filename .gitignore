@@ -1,3 +1,5 @@
 .idea
 test
 __pycache__
+*.ipynb
+logic/run.py
