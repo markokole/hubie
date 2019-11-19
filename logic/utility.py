@@ -9,12 +9,11 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 class Utility:    
-    def __init__(self, match_id=0):
+    def __init__(self, match_id=0, dry_run=True):
         
         self.__dic = Dictionary()
         self.__match_id = match_id
-        self.__events_file = str(self.__match_id) + "_MatchEventsViewModel.json"
-        self.__summary_file = str(self.__match_id) + "_MatchSummaryViewModel.json"
+        self.__dry_run = dry_run
         self.__s3 = boto3.resource('s3')
         self.__bucket_name = "hubie"
         self.__path_staging_in = "blno/STAGING_IN/"
@@ -23,93 +22,88 @@ class Utility:
         #self.dict_starters = ""
 
         if self.__match_id > 0:
-            self.__parse_events_file()
+            self.__summary, self.__home_team, self.__away_team = self.__parse_summary_file()
+            self.__data = self.__parse_events_file()
+            self.__events = self.__event(data=self.__data)
+            self.__roster = self.__roster(self.__data, self.__home_team, self.__away_team)
+            self.__shooting_stat = self.__shooting_stat(self.__events)
+            self.__non_shooting_stat = self.__non_shooting_stat(self.__events)
+            self.__dict_starters, self.__players_all_playtimes = self.__players_all_playtimes(self.__events)
 
     def __parse_summary_file(self):
         """
         Method returns a DataFrame because it takes in a JSON file with metadata about a match
         :return:
         """
-        print("Processing summary file: {}".format(self.__path_staging_in + self.__summary_file))
-        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + self.__summary_file)
+        summary_file = str(self.__match_id) + "_MatchSummaryViewModel.json"
+        print("Processing summary file: {}".format(self.__path_staging_in + summary_file))
+        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + summary_file)
         body = obj.get()['Body'].read().decode("utf-8")
         data_summary = json.loads(body)
         now = datetime.now()
         current_time = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        self.__tournament = data_summary['Tournament']
-        self.__home_team = data_summary['HomeTeam']
-        self.__away_team = data_summary['AwayTeam']
-        self.__score_home = data_summary['HomeGoals']
-        self.__score_away = data_summary['AwayGoals']
+        tournament = data_summary['Tournament']
+        #home_team = data_summary['HomeTeam']
+        #away_team = data_summary['AwayTeam']
+        home_team = data_summary['HomeTeam']
+        away_team = data_summary['AwayTeam']
+        score_home = data_summary['HomeGoals']
+        score_away = data_summary['AwayGoals']
         match_date = data_summary['Date'][:10] # get only date
         short_date = match_date[-2:] + "." + match_date[-5:-3] + "." + match_date[2:4]
-        self.__periods = data_summary['Periods']
-        self.__period_score_home = []
-        self.__period_score_away = []
+        periods = data_summary['Periods']
+        period_score_home = []
+        period_score_away = []
 
-        for i in range(len(self.__periods)):
-            self.__period_score_home.append(self.__periods[i]['HomeGoals'])
-            self.__period_score_away.append(self.__periods[i]['AwayGoals'])
+        for i in range(len(periods)):
+            period_score_home.append(periods[i]['HomeGoals'])
+            period_score_away.append(periods[i]['AwayGoals'])
 
-        match_summary = [[self.__tournament, self.__match_id, self.__home_team, self.__away_team, match_date, short_date,
-                          self.__score_home, self.__score_away, self.__period_score_home, self.__period_score_away, current_time]]
+        match_summary = [[tournament, self.__match_id, home_team, away_team, match_date, short_date,
+                          score_home, score_away, period_score_home, period_score_away, current_time]]
 
         columns = ['Tournament', 'MatchId', 'HomeTeam', 'AwayTeam', 'Match Date', 'Short Date', 'Score Home', 'Score Away', 'Period Score Home', 'Period Score Away', 'CreatedTime']
         df = pd.DataFrame(data=match_summary, columns=columns)
+        return df, home_team, away_team
 
-        return df
+    def match_header(self):
+        folder_name = "match_header"
+        self.save_dataframe(self.__df_summary, folder_name)
 
     def __parse_events_file(self):
         """
         :return:
         """
-        print("Processing events file: {}".format(self.__path_staging_in + self.__events_file))
-        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + self.__events_file)
+        events_file = str(self.__match_id) + "_MatchEventsViewModel.json"
+        print("Processing events file: {}".format(self.__path_staging_in + events_file))
+        obj = self.__s3.Object(self.__bucket_name, self.__path_staging_in + events_file)
         body = obj.get()['Body'].read().decode("utf-8")
-        self.__data = json.loads(body)
-        self.home_team = self.__data['HomeTeam']
-        self.away_team = self.__data['AwayTeam']
+        data = json.loads(body)
 
-        self.events = self.__event()
+        '''self.events = self.__event()
         self.roster = self.__roster()
         self.shooting_stat = self.__shooting_stat()
         self.non_shooting_stat = self.__non_shooting_stat()
-        self.dict_starters, self.players_all_playtimes = self.__players_all_playtimes()
+        self.dict_starters, self.players_all_playtimes = self.__players_all_playtimes()'''
 #        self.event_lineups = self.__event_lineups()
 
-######
-## Load DataFrames
-###### 
+        return data
 
-    def load_dataframe(self, name):
-        self.__name = name
-        path = "blno/" + self.__name
-        df = pd.DataFrame()
-        for obj in self.__bucket.objects.filter(Prefix=path):
-            file_name = obj.key
-            if file_name.find('json') != -1:
-                obj = self.__s3.Object(self.__bucket_name, file_name)
-                body = obj.get()['Body'].read()
-                df_tmp = pd.read_json(body, lines=True)
-                df = df.append(df_tmp)
-        
-        return df
-    
 ######
 ## Prepare dataframes
 ######    
     
-    def __roster(self):
-        home_players = self.__data['HomePlayers']
-        away_players = self.__data['AwayPlayers']
+    def __roster(self, data, home_team, away_team):
+        home_players = data['HomePlayers']
+        away_players = data['AwayPlayers']
 
         for player in home_players:
             player['HomeAway'] = 'H'
-            player['Team'] = self.home_team
+            player['Team'] = home_team
         for player in away_players:
             player['HomeAway'] = 'A'
-            player['Team'] = self.away_team
+            player['Team'] = away_team
 
         players_full_list = home_players + away_players
         players_full = pd.DataFrame.from_records(players_full_list, exclude=['IsCaptain', 'IsCoach'])
@@ -117,10 +111,10 @@ class Utility:
 
         return players_full
 
-    def __event(self):
+    def __event(self, data):
         """
         """
-        events = pd.DataFrame(self.__data['Events']).fillna(0) # text replacement
+        events = pd.DataFrame(data['Events']).fillna(0) # text replacement
         events = events.loc[events.PeriodTime != ''] # remove rows with no time
         events['PeriodName'] = events['PeriodName'].str.replace('. periode', '') # remove .periode
         events['Team'] = events['Team'].replace({'B': 'Away', 'H': 'Home'}) #change norwegian B (Borte) with english A (Away)
@@ -147,15 +141,14 @@ class Utility:
         events = events[no_top_sub_rows:]
         events.index = range(len(events))
 
-        self.events = events
-        return self.events
+        return events
 
-    def __players_all_playtimes(self):
+    def __players_all_playtimes(self, events):
         """
         Method calculates each player's time on the floor - every time interval the player is on the floor
         Return: DataFrame with following columns: HomeAway Player In Out PlayTime
         """
-        events = self.events
+
         dict_players = self.dict_player_fullname()
         #dict_player_team = self.dict_player_team()
 
@@ -187,9 +180,9 @@ class Utility:
                 if in_out[0] == 'out':
                     in_out = ['in'] + in_out
                     list_minutes = first_second + list_minutes
-                    dict_starters[player_id] =  'Y'
+                    dict_starters[player_id] = 'Y'
                 else:
-                    dict_starters[player_id] =  'N'
+                    dict_starters[player_id] = 'N'
 
                 # if finished game add last_second at the end
                 if in_out[-1] == 'in':
@@ -210,8 +203,10 @@ class Utility:
             _count = events['Player'].loc[events.Player.isin([player_id])].count()
             if _count > 0:  # player played all game
                 playing_time.append({'player_id': player_id, 'in': pd.to_datetime(first_second[0]), 'out': pd.to_datetime(last_second[0])})
+                dict_starters[player_id] = 'Y'
             else:  # player didnt play
                 playing_time.append({'player_id': player_id, 'in': pd.to_datetime(first_second[0]), 'out': pd.to_datetime(first_second[0])})
+                dict_starters[player_id] = 'N'
 
         df_play_time = pd.DataFrame.from_records(playing_time)
         df_play_time.columns = ['In', 'Out', 'Player']
@@ -228,9 +223,7 @@ class Utility:
         list_events_minutes = self.events.Minute.loc[self.events.MatchEventType != 'Substitution'].unique()
         list_lineups_at_event = []
         playtime_df = self.players_all_playtimes
-        print(self.events.dtypes)
         for t in list_events_minutes:
-            print(playtime_df.dtypes)
             f = (playtime_df.In < t) & \
                 (playtime_df.Out >= t)
 
@@ -270,10 +263,10 @@ class Utility:
 
         return df_lineup_event
 
-    def __shooting_stat(self):
+    def __shooting_stat(self, events):
         """
         """
-        df = self.events[['Player', 'ShotResult', 'MatchEventType']]
+        df = events[['Player', 'ShotResult', 'MatchEventType']]
         f = (df.MatchEventType == 'Shot')
         df = df.loc[f][['ShotResult', 'Player']]
         
@@ -299,13 +292,13 @@ class Utility:
         shot_df['MatchId'] = self.__match_id
         return shot_df
 
-    def __assist_stat(self):
+    def __assist_stat(self, events):
         """
         Return DataFrame with Player Id and sum of all assists
         
         Because assists are stored in separate column in the source files, this method is needed.
         """
-        df = self.events
+        df = events
         f_assist = (df.Assist != 0)
         df = df[['Player', 'Assist']].loc[f_assist].groupby('Assist').count().reset_index()
         list_assist = []
@@ -326,7 +319,7 @@ class Utility:
         Return DataFrame with Player Id and sum of all fouls
         Because fouls are stored in separate column in the source files, this method is needed.
         """
-        df = self.events
+        df = self.__events
         f_foul = (df.FoulType != 0)
         df = df[['Player', 'FoulType']].loc[f_foul].groupby('Player').count().reset_index()
 
@@ -343,10 +336,10 @@ class Utility:
         foul_df = pd.DataFrame.from_records(list_foul, columns=['Player', 'Foul'])
         return foul_df
 
-    def __non_shooting_stat(self):
+    def __non_shooting_stat(self, events):
         """
         """
-        df = self.events
+        df = events
         event_type = ['DefensiveRebound', 'OffensiveRebound', 'Turnover', 'Steal', 'Block']
         f = (df.MatchEventType.isin(event_type))
         columns = ['Player', 'MatchEventType', 'HomeAway', 'PeriodTime']
@@ -374,7 +367,7 @@ class Utility:
         non_shot_df['Team'] = non_shot_df.Player.replace(self.dict_player_team())
         non_shot_df['MatchId'] = self.__match_id
         
-        all_non_shot_stat_df = pd.DataFrame.merge(non_shot_df, self.__assist_stat()) # join to get assists data
+        all_non_shot_stat_df = pd.DataFrame.merge(non_shot_df, self.__assist_stat(events)) # join to get assists data
         all_non_shot_stat_df2 = pd.DataFrame.merge(all_non_shot_stat_df, self.__foul_stat()) # join to get fouls data
 
         return all_non_shot_stat_df2
@@ -384,41 +377,53 @@ class Utility:
 ######
 ## Getters
 ######    
+    def get_events(self):
+        return self.__events
+
     def get_roster(self):
-        return self.__roster()
+        return self.__roster
 
     def get_shooting_stat(self):
-        return self.__shooting_stat()
+        return self.__shooting_stat
+
+    def get_non_shooting_stat(self):
+        return self.__non_shooting_stat
 
     def get_match_summary(self):
-        return self.__parse_summary_file()
+        return self.__summary
+
+    def get_starters(self):
+        return self.__dict_starters
+
+    def get_all_playtimes(self):
+        return self.__players_all_playtimes
+
+    def get_team_names(self):
+        return {"Home": self.__home_team, "Away": self.__away_team}
 
 ######
 ## List of values
 ######
     
     def LOV_fouls(self):
-        LOV_fouls = pd.DataFrame(self.events.FoulType.astype('str').unique(), columns=['FoulType'])
+        LOV_fouls = pd.DataFrame(self.__events.FoulType.astype('str').unique(), columns=['FoulType'])
         LOV_fouls['FoulTypeDesc'] = LOV_fouls.replace(self.__dic.foul_description)
         return LOV_fouls
         
     def LOV_shots(self):
-        LOV_shots = pd.DataFrame(self.events.ShotResult.unique(), columns=['ShotResult'])
+        LOV_shots = pd.DataFrame(self.__events.ShotResult.unique(), columns=['ShotResult'])
         LOV_shots['ShotResultDesc'] = LOV_shots.replace(self.__dic.shot_description)
         return LOV_shots
-    
-    def dict_team_names(self):
-        return {"Home": self.home_team, "Away": self.away_team}
-    
+
     def dict_player_fullname(self):
-        player_full_df = self.roster
+        player_full_df = self.__roster
         player_fullname_df = pd.DataFrame(player_full_df.FirstName + ' ' + player_full_df.LastName, columns=['FullName'])
         player_fullname_df.index = player_full_df.Id
         dict_player_fullname = player_fullname_df.to_dict()['FullName']
         return dict_player_fullname
     
     def dict_player_team(self):
-        player_full_df = self.roster
+        player_full_df = self.__roster
         player_team_df = player_full_df['Team']
         player_team_df.index = player_full_df.Id
         player_team_df.column = ['Team']
@@ -428,8 +433,15 @@ class Utility:
 ######
 # Save to S3
 ######
-    
-    def save_dataframe_s3(self, df, folder):
+
+    def save_dataframe(self, df, folder_name):
+        if self.__dry_run != True:
+            self.__save_dataframe_s3(df=df, folder=folder_name)
+            print("Dataframe saved to folder {}.".format(folder_name))
+        else:
+            print("Dry run is activated: dataframe {} was created but not saved!".format(folder_name))
+
+    def __save_dataframe_s3(self, df, folder):
         competition = 'blno/' + folder + '/'
         s3_resource = boto3.resource('s3')
         bucket_name = 'hubie'
@@ -440,14 +452,4 @@ class Utility:
         s3object.put(
             Body=(bytes(json_data.encode('UTF-8')))
         )
-        
-######
-### Summary file
-######
-    '''list_event_type = events['MatchEventType'].unique()
-for event in list_event_type:
-    print(events.loc[events['MatchEventType'] == event]
-          .groupby(['MatchEventType', 'HomeAway'])['MatchEventType']
-          .count()
-          .sort_index(ascending=False))
-    print("-------------------------------------")'''
+
