@@ -2,7 +2,6 @@ from datetime import datetime
 from logic.dictionary import Dictionary
 import json
 import pandas as pd
-import numpy as np
 import boto3
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -19,21 +18,25 @@ class Utility:
         self.__path_staging_in = "blno/STAGING_IN/"
         self.__path_historical_files = 'blno/HISTORICAL_FILES/'
         self.__bucket = self.__s3.Bucket(self.__bucket_name)
-        #self.dict_starters = ""
+
+        self.__df_data = pd.DataFrame()
+        self.__df_events = pd.DataFrame()
+        self.__df_roster = pd.DataFrame()
+        self.__df_shooting_stat = pd.DataFrame()
+        self.__df_non_shooting_stat = pd.DataFrame()
 
         if self.__match_id > 0:
-            self.__summary, self.__home_team, self.__away_team = self.__parse_summary_file()
-            self.__data = self.__parse_events_file()
-            self.__events = self.__event(data=self.__data)
-            self.__roster = self.__roster(self.__data, self.__home_team, self.__away_team)
-            self.__shooting_stat = self.__shooting_stat(self.__events)
-            self.__non_shooting_stat = self.__non_shooting_stat(self.__events)
-            self.__dict_starters, self.__players_all_playtimes = self.__players_all_playtimes(self.__events)
+            self.__df_summary, self.__home_team, self.__away_team = self.__parse_summary_file()
+            self.__df_data = self.__parse_events_file()
+            self.__df_events = self.__event(data=self.__df_data)
+            self.__df_roster = self.__roster(self.__df_data, self.__home_team, self.__away_team)
+            self.__df_shooting_stat = self.__shooting_stat(self.__df_events)
+            self.__df_non_shooting_stat = self.__non_shooting_stat(self.__df_events)
+            self.__dict_starters, self.__players_all_playtimes = self.__players_all_playtimes(self.__df_events)
 
     def __parse_summary_file(self):
         """
-        Method returns a DataFrame because it takes in a JSON file with metadata about a match
-        :return:
+        :return: dataframe with metadata about match
         """
         summary_file = str(self.__match_id) + "_MatchSummaryViewModel.json"
         print("Processing summary file: {}".format(self.__path_staging_in + summary_file))
@@ -43,9 +46,7 @@ class Utility:
         now = datetime.now()
         current_time = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        tournament = data_summary['Tournament']
-        #home_team = data_summary['HomeTeam']
-        #away_team = data_summary['AwayTeam']
+        league = data_summary['Tournament']
         home_team = data_summary['HomeTeam']
         away_team = data_summary['AwayTeam']
         score_home = data_summary['HomeGoals']
@@ -60,10 +61,10 @@ class Utility:
             period_score_home.append(periods[i]['HomeGoals'])
             period_score_away.append(periods[i]['AwayGoals'])
 
-        match_summary = [[tournament, self.__match_id, home_team, away_team, match_date, short_date,
+        match_summary = [[league, self.__match_id, home_team, away_team, match_date, short_date,
                           score_home, score_away, period_score_home, period_score_away, current_time]]
 
-        columns = ['Tournament', 'MatchId', 'HomeTeam', 'AwayTeam', 'Match Date', 'Short Date', 'Score Home', 'Score Away', 'Period Score Home', 'Period Score Away', 'CreatedTime']
+        columns = ['League', 'MatchId', 'HomeTeam', 'AwayTeam', 'Match Date', 'Short Date', 'Score Home', 'Score Away', 'Period Score Home', 'Period Score Away', 'CreatedTime']
         df = pd.DataFrame(data=match_summary, columns=columns)
         return df, home_team, away_team
 
@@ -87,7 +88,6 @@ class Utility:
         self.non_shooting_stat = self.__non_shooting_stat()
         self.dict_starters, self.players_all_playtimes = self.__players_all_playtimes()'''
 #        self.event_lineups = self.__event_lineups()
-
         return data
 
 ######
@@ -118,7 +118,7 @@ class Utility:
         events = events.loc[events.PeriodTime != ''] # remove rows with no time
         events['PeriodName'] = events['PeriodName'].str.replace('. periode', '') # remove .periode
         events['Team'] = events['Team'].replace({'B': 'Away', 'H': 'Home'}) #change norwegian B (Borte) with english A (Away)
-        
+
         # type conversion
         convert_cols = ['Assist', 'Player', 'PlayerIn', 'PlayerOut', 'ShotResult', 'PeriodName', 'FoulType']
         events[convert_cols] = events[convert_cols].apply(lambda x: x.astype('int32'))
@@ -131,10 +131,10 @@ class Utility:
         events['Minute'] = 10 * (events['PeriodName'] - 1)
         events['Minute'] = pd.to_timedelta(events.Minute, unit='m')
         events['Minute'] = events['Minute'] + events['PeriodTime']
-        
+
         # Round up to a full minute for aggregation
         events['MinuteRound'] = events.Minute.dt.ceil(freq="min")
-        
+
         # Some play-by-play datasets begin with MatchEventType = Substitution. Those rows are removed here
         filter_sub_first = (events.MatchEventType == 'Substitution') & (events.Minute == pd.to_datetime('1900-01-01 00:00:00'))
         no_top_sub_rows = len(events.loc[filter_sub_first])
@@ -319,7 +319,7 @@ class Utility:
         Return DataFrame with Player Id and sum of all fouls
         Because fouls are stored in separate column in the source files, this method is needed.
         """
-        df = self.__events
+        df = self.__df_events
         f_foul = (df.FoulType != 0)
         df = df[['Player', 'FoulType']].loc[f_foul].groupby('Player').count().reset_index()
 
@@ -371,26 +371,26 @@ class Utility:
         all_non_shot_stat_df2 = pd.DataFrame.merge(all_non_shot_stat_df, self.__foul_stat()) # join to get fouls data
 
         return all_non_shot_stat_df2
-        
-        
+
         
 ######
-## Getters
-######    
+# Getters
+######
+
     def get_events(self):
-        return self.__events
+        return self.__df_events
 
     def get_roster(self):
-        return self.__roster
+        return self.__df_roster
 
     def get_shooting_stat(self):
-        return self.__shooting_stat
+        return self.__df_shooting_stat
 
     def get_non_shooting_stat(self):
-        return self.__non_shooting_stat
+        return self.__df_non_shooting_stat
 
     def get_match_summary(self):
-        return self.__summary
+        return self.__df_summary
 
     def get_starters(self):
         return self.__dict_starters
@@ -406,24 +406,24 @@ class Utility:
 ######
     
     def LOV_fouls(self):
-        LOV_fouls = pd.DataFrame(self.__events.FoulType.astype('str').unique(), columns=['FoulType'])
+        LOV_fouls = pd.DataFrame(self.__df_events.FoulType.astype('str').unique(), columns=['FoulType'])
         LOV_fouls['FoulTypeDesc'] = LOV_fouls.replace(self.__dic.foul_description)
         return LOV_fouls
         
     def LOV_shots(self):
-        LOV_shots = pd.DataFrame(self.__events.ShotResult.unique(), columns=['ShotResult'])
+        LOV_shots = pd.DataFrame(self.__df_events.ShotResult.unique(), columns=['ShotResult'])
         LOV_shots['ShotResultDesc'] = LOV_shots.replace(self.__dic.shot_description)
         return LOV_shots
 
     def dict_player_fullname(self):
-        player_full_df = self.__roster
+        player_full_df = self.__df_roster
         player_fullname_df = pd.DataFrame(player_full_df.FirstName + ' ' + player_full_df.LastName, columns=['FullName'])
         player_fullname_df.index = player_full_df.Id
         dict_player_fullname = player_fullname_df.to_dict()['FullName']
         return dict_player_fullname
     
     def dict_player_team(self):
-        player_full_df = self.__roster
+        player_full_df = self.__df_roster
         player_team_df = player_full_df['Team']
         player_team_df.index = player_full_df.Id
         player_team_df.column = ['Team']
