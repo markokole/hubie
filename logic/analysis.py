@@ -29,6 +29,9 @@ class Analysis:
         self.__non_shooting_stat_df = self.__utility.get_non_shooting_stat()
         self.__dict_shot_result_points = self.__dic.shot_result_points
 
+    def match_header(self):
+        self.__utility.match_header()
+
     def point_accumulation(self):
         f_made_shots = (self.__events.MatchEventType == 'Shot') & \
                        (self.__events.ShotResult.isin([200444, 200443, 200442]))  # made shots
@@ -100,7 +103,6 @@ class Analysis:
 
     def assist(self):
         """
-
         :return:
         """
         f_assist = (self.__events.Assist != 0)
@@ -201,11 +203,12 @@ class Analysis:
                                                   'PlayTime': 'MIN'})
 
         columns = ['MatchId', 'PlayerId', 'HomeAway', 'Player', 'MIN', 'Points', '2FGM', '2FGA', '3FGM', '3FGA', 'FTM', 'FTA']
-        columns = columns + ['DREB', 'OREB', 'REB', 'AST', 'STL', 'TOV', 'BLK', 'FLS', 'Efficiency']
+        columns = columns + ['DREB', 'OREB', 'REB', 'AST', 'STL', 'TOV', 'BLK', 'FLS', 'Efficiency', 'Starter']
         all_stat_df = all_stat_df[columns]
         folder_name = "player_stat"
+        #print(all_stat_df)
         self.__utility.save_dataframe(all_stat_df, folder_name)
-        return all_stat_df
+        #return all_stat_df
 
     def team_fouls_per_period(self):
 
@@ -235,6 +238,7 @@ class Analysis:
         self.__utility.save_dataframe(team_foul_period, folder_name)
 
     def run_all_analyses(self):
+        self.match_header()
         self.point_accumulation()
         self.assist()
         self.scoring()
