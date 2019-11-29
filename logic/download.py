@@ -5,6 +5,7 @@ import requests
 from functools import reduce
 import boto3
 
+
 class Download:
     def __init__(self, list_match_id):
         self.__list_match_id = list_match_id
@@ -45,14 +46,17 @@ class Download:
             for search in search_dict:
                 JSON = re.compile('Nif.Basket.' + search + '(\({.*?}\));', re.DOTALL)
                 matches = JSON.search(soup.get_text())
-                data_json = json.loads(matches.group(1)[1:-1]) #takes away the ()
-                nor_char_data_json = json.dumps(self.__convert_to_nor_char(data_json)) # replace the chars with norwegian chars
+                if matches != None:
+                    data_json = json.loads(matches.group(1)[1:-1]) #takes away the ()
+                    nor_char_data_json = json.dumps(self.__convert_to_nor_char(data_json)) # replace the chars with norwegian chars
 
-                file_name = match_id + "_" + search + '.json'
+                    file_name = match_id + "_" + search + '.json'
 
-                s3object = self.__s3_resource.Object(self.__bucket_name, self.__path_staging_in + file_name)
+                    s3object = self.__s3_resource.Object(self.__bucket_name, self.__path_staging_in + file_name)
 
-                s3object.put(
-                    Body=(nor_char_data_json)
-                )
-                print("File {} saved to {}".format(file_name, self.__path_staging_in))
+                    s3object.put(
+                        Body=(nor_char_data_json)
+                    )
+                    print("File {} saved to {}".format(file_name, self.__path_staging_in))
+                else:
+                    print("Match Id {} does not exist".format(match_id))
