@@ -7,6 +7,17 @@ h1, h2, h3, h4, h5, h6 {
     color: blue;
 }
 
+h2, h5 {
+    text-align: center;
+}
+
+div.graph {
+  border-style: solid;
+  border-color: #E8E8E8;
+  width: 90%;
+  border-width: 1px;
+}
+
 .graph {
     //height: 300px;
     position: relative;
@@ -39,15 +50,15 @@ h1, h2, h3, h4, h5, h6 {
   background-color: white;
 }
 
-table {
+table-graph {
   font-family: arial, sans-serif;
   border-collapse: collapse;
-  width: 130%;
+  width: 100%;
 }
 
-td, th {
+td-graph, th-graph {
   border: 1px solid #dddddd;
   text-align: left;
   //padding: 80px;
-  width: 500px;
+  width: 400px;
 }
