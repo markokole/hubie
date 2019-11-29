@@ -2,4 +2,5 @@
 test
 __pycache__
 *.ipynb
-logic/run.py
+old/test/run.py
+old/old_hubie.py

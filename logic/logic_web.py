@@ -177,7 +177,7 @@ class Logic:
 
         figure_stat_cat_starter_bench = {'data': [trace1, trace2],
                                          'layout': go.Layout(
-                                             title='{} distribution between starters and bench'.format(the_column),
+                                             title='{} distribution'.format(the_column),
                                              xaxis={'title': 'Team'},
                                              barmode="stack"
                                          )
