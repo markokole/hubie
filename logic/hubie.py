@@ -25,6 +25,14 @@ efficiency_explanation = html.Div([html.P(children=efficiency_explanation_text1)
 
 style_header_box_score = {'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
 
+# dict removes the toolbar that pops up on hover on each graph
+remove_toolbar_buttons = {'modeBarButtonsToRemove':
+                              ['pan2d', 'lasso2d', 'zoom2d', 'select2d',
+                               'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d',
+                               'hoverClosestCartesian', 'hoverCompareCartesian',
+                               'toggleHover', 'toImage', 'toggleSpikelines'],
+                          'displaylogo': False}
+
 
 def style_data_conditional_box_score(max_eff):
     list_style_data_conditional_box_score = [
@@ -62,7 +70,7 @@ def style_data_conditional_box_score(max_eff):
     return list_style_data_conditional_box_score
 
 
-#logic = Logic()
+# logic = Logic()
 leagues = logic.all_leagues()  # ['BLNO Kvinner Grunnserie']#, 'BLNO Menn Grunnserie']
 
 #######
@@ -113,15 +121,19 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                           children=[dcc.Tab(label='Scoring',
                                                             value='tab-scoring',
                                                             children=[html.Div(
-                                                                [html.Div(dcc.Graph(id='graph-cumulative-score'),
+                                                                [html.Div(dcc.Graph(id='graph-cumulative-score',
+                                                                                    config=remove_toolbar_buttons),
                                                                           className="div graph"),
                                                                  html.Br(),
-                                                                 html.Div(dcc.Graph(id='graph-difference'),
+                                                                 html.Div(dcc.Graph(id='graph-difference',
+                                                                                    config=remove_toolbar_buttons),
                                                                           className="div graph"),
                                                                  html.Div([html.Div(dcc.Graph(
-                                                                     id='graph-score-starter-bench'),
+                                                                     id='graph-score-starter-bench',
+                                                                     config=remove_toolbar_buttons),
                                                                      className="six columns div graph"),
-                                                                     html.Div(dcc.Graph(id="graph-score-per-quarter"),
+                                                                     html.Div(dcc.Graph(id="graph-score-per-quarter",
+                                                                                        config=remove_toolbar_buttons),
                                                                               className="six columns div graph")])],
                                                                 className="row"
                                                             )]
@@ -134,19 +146,21 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                                                       dcc.Tabs(id="tabs-box-score",
                                                                                value="tab-box-score-home",
                                                                                children=[
-                                                                                   dcc.Tab(id="tab-box-score-title-home",
-                                                                                           value="tab-box-score-home",
-                                                                                           children=[html.Br(),
-                                                                                               dash_table.DataTable(
-                                                                                                   id='table-box-score-home',
-                                                                                                   style_header=style_header_box_score)]),
-                                                                                   dcc.Tab(id="tab-box-score-title-away",
-                                                                                           value="tab-box-score-away",
-                                                                                           children=[html.Br(),
-                                                                                               dash_table.DataTable(
-                                                                                                   id='table-box-score-away',
-                                                                                                   style_header=style_header_box_score)
-                                                                                           ])]),
+                                                                                   dcc.Tab(
+                                                                                       id="tab-box-score-title-home",
+                                                                                       value="tab-box-score-home",
+                                                                                       children=[html.Br(),
+                                                                                                 dash_table.DataTable(
+                                                                                                     id='table-box-score-home',
+                                                                                                     style_header=style_header_box_score)]),
+                                                                                   dcc.Tab(
+                                                                                       id="tab-box-score-title-away",
+                                                                                       value="tab-box-score-away",
+                                                                                       children=[html.Br(),
+                                                                                                 dash_table.DataTable(
+                                                                                                     id='table-box-score-away',
+                                                                                                     style_header=style_header_box_score)
+                                                                                                 ])]),
                                                                       html.Br(),
                                                                       html.Br()]
                                                             ),
@@ -154,14 +168,14 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                                     dcc.Tab(label='Efficiency',
                                                             value='tab-efficiency',
                                                             children=[html.Div([html.Div([html.Br(),
-                                                                                          dcc.Graph(
-                                                                                              id='graph-efficiency-home'
+                                                                                          dcc.Graph(id='graph-efficiency-home',
+                                                                                                    config=remove_toolbar_buttons
                                                                                           )]
                                                                                          ,
                                                                                          className="six columns div graph"),
                                                                                 html.Div([html.Br(),
-                                                                                          dcc.Graph(
-                                                                                              id='graph-efficiency-away'
+                                                                                          dcc.Graph(id='graph-efficiency-away',
+                                                                                                    config=remove_toolbar_buttons
                                                                                           )]
                                                                                          ,
                                                                                          className="six columns div graph")
@@ -172,10 +186,12 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                                             value='tab-assist',
                                                             children=[html.Br(),
                                                                       html.Div([
-                                                                          html.Div(dcc.Graph(id='graph-assist')
+                                                                          html.Div(dcc.Graph(id='graph-assist',
+                                                                                             config=remove_toolbar_buttons)
                                                                                    , className="six columns div graph"),
                                                                           html.Div(
-                                                                              dcc.Graph(id='graph-assist-starter-bench')
+                                                                              dcc.Graph(id='graph-assist-starter-bench',
+                                                                                        config=remove_toolbar_buttons)
                                                                               , className="six columns div graph"),
                                                                       ], className="row")]
                                                             ),
