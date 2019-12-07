@@ -159,29 +159,25 @@ class Logic:
         the_column = statistical_category
         cols = ['MatchId', 'HomeAway', 'Starter', the_column]
         df = df[cols]
-        df['Team'] = df.HomeAway.replace({'Home': self.__home_team, 'Away': self.__away_team})
-        df = df.drop(['HomeAway'], axis=1)
 
-        df = df[['Team', 'Starter', the_column]].groupby(['Team', 'Starter']).sum().reset_index()
-        df = df.groupby(['Team', 'Starter']).sum().reset_index()
+        df = df[['HomeAway', 'Starter', the_column]].groupby(['HomeAway', 'Starter']).sum().reset_index()
+        df = df.groupby(['HomeAway', 'Starter']).sum().reset_index().sort_values(['HomeAway'], ascending=False)
+        x_axis = [self.__home_team, self.__away_team]
+        y_starters = df.loc[df.Starter == '*'][the_column].tolist()
+        y_bench = df.loc[df.Starter == ''][the_column].tolist()
 
-        x_axis = df.Team.unique()
-        y_trace1 = df.loc[df.Starter == '*'][the_column].tolist()
-        name_trace1 = "Starters"
-        y_trace2 = df.loc[df.Starter == ''][the_column].tolist()
-        name_trace2 = "Bench"
-        trace1 = go.Bar(
+        trace_starters = go.Bar(
             x=x_axis,
-            y=y_trace1,
-            name=name_trace1
+            y=y_starters,
+            name="Starters"
         )
-        trace2 = go.Bar(
+        trace_bench = go.Bar(
             x=x_axis,
-            y=y_trace2,
-            name=name_trace2
+            y=y_bench,
+            name="Bench"
         )
 
-        figure_stat_cat_starter_bench = {'data': [trace1, trace2],
+        figure_stat_cat_starter_bench = {'data': [trace_starters, trace_bench],
                                          'layout': go.Layout(
                                              title='{} distribution'.format(the_column),
                                              xaxis={'title': 'Team'},
