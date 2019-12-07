@@ -31,12 +31,13 @@ class Logic:
     """
     """
 
-    def __init__(self, str_match_id=7032979):
+    def __init__(self, str_match_id=7032979, verbose=True):
         """
         Initialize the instance of Logic object
         :param str_match_id: id of the match that is being visualized
         """
         self.__match_id = int(str_match_id)
+        self.__verbose = verbose # print out data for debugging
         self.__home_team = ""
         self.__away_team = ""
         self.__max_eff_home = ""
@@ -50,6 +51,11 @@ class Logic:
         self.__df_player_stat = load_dataframe("player_stat")
         self.__df_cumulative_score = load_dataframe("cumulative_score")
         self.__df_assist = load_dataframe("assists")
+
+    def write_details(self, text):
+        if self.__verbose:
+            print(text)
+
 
     def match_list(self, league):
         """
@@ -230,6 +236,7 @@ class Logic:
         f_match = df.MatchId == match_id
         df = df.loc[f_match]
 
+        df = df.copy()
         df['MIN'] = df.MIN.astype(str).str[-10:-5]
 
         self.__max_eff_home = df.loc[df.HomeAway == 'Home']['Efficiency'].agg(['max']).to_dict()['max']

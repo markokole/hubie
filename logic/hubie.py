@@ -10,6 +10,8 @@ import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+logic = Logic()
+
 # Text for explaining Box Score tab
 box_score_star_text = "* - player is starter."
 efficiency_explanation_text1 = """Efficiency is calculated using Euroleague formula:"""
@@ -55,11 +57,12 @@ def style_data_conditional_box_score(max_eff):
         'if': dict_if_eff_max,
         'backgroundColor': 'green'
     }
+    logic.write_details("style_data_conditional_box_score -> " + str(condition_max_eff_home))
     list_style_data_conditional_box_score.append(condition_max_eff_home)
     return list_style_data_conditional_box_score
 
 
-logic = Logic()
+#logic = Logic()
 leagues = logic.all_leagues()  # ['BLNO Kvinner Grunnserie']#, 'BLNO Menn Grunnserie']
 
 #######
@@ -149,7 +152,7 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                                             ),
                                                     # efficiency
                                                     dcc.Tab(label='Efficiency',
-                                                            value='efficiency',
+                                                            value='tab-efficiency',
                                                             children=[html.Div([html.Div([html.Br(),
                                                                                           dcc.Graph(
                                                                                               id='graph-efficiency-home'
@@ -166,7 +169,7 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                                                                className="row")]
                                                             ),
                                                     dcc.Tab(label='Assist',
-                                                            value='assist',
+                                                            value='tab-assist',
                                                             children=[html.Br(),
                                                                       html.Div([
                                                                           html.Div(dcc.Graph(id='graph-assist')
@@ -177,7 +180,7 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                                                       ], className="row")]
                                                             ),
                                                     dcc.Tab(label='Rebound',
-                                                            value='rebound')
+                                                            value='tab-rebound')
                                                     ])
                                  ],
                                 className="split right")
@@ -194,7 +197,7 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
     Output('dropdown-match', 'options'),
     [Input('league-dropdown', 'value')])
 def set_match_options(selected_league):
-    print(selected_league)
+    logic.write_details("League: " + selected_league)
     return logic.match_list(selected_league)
 
 
@@ -272,10 +275,10 @@ def tab_scoring(data_cum_score, data_difference, data_score_starter_bench, data_
                Output('memory-box-score-home-data', 'data'),
                Output('memory-box-score-away-data', 'data')],
               [Input('dropdown-match', 'value')])
-def memory_box_score(str_match_id):
-    print(str_match_id)
+def memory_box_score(match_id):
+    logic.write_details("MatchId: " + str(match_id))
     return_cols = logic.get_box_score_cols()
-    return_data_home, return_data_away = logic.box_score(int(str_match_id))
+    return_data_home, return_data_away = logic.box_score(match_id)
     return return_cols, return_data_home, return_data_away
 
 
