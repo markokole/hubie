@@ -202,7 +202,7 @@ class Analysis:
                                                   'OffensiveRebound': 'OREB',
                                                   'PlayTime': 'MIN'})
 
-        columns = ['MatchId', 'PlayerId', 'HomeAway', 'Player', 'MIN', 'Points', '2FGM', '2FGA', '3FGM', '3FGA', 'FTM', 'FTA']
+        columns = ['MatchId', 'PlayerId', 'HomeAway', 'Team', 'Player', 'MIN', 'Points', '2FGM', '2FGA', '3FGM', '3FGA', 'FTM', 'FTA']
         columns = columns + ['DREB', 'OREB', 'REB', 'AST', 'STL', 'TOV', 'BLK', 'FLS', 'Efficiency', 'Starter']
         all_stat_df = all_stat_df[columns]
         folder_name = "player_stat"
