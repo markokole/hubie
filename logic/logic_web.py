@@ -243,14 +243,16 @@ class Logic:
     def data_efficiency(self, match_id):
         df = self.__df_player_stat
         df = df.loc[(df.MatchId == match_id)]
-        f_home = (df.HomeAway == 'Home')
-        f_away = (df.HomeAway == 'Away')
-        df_home = df.loc[f_home][['Player', 'Efficiency']].sort_values(by=['Efficiency'])
-        df_away = df.loc[f_away][['Player', 'Efficiency']].sort_values(by=['Efficiency'])
+        filter_home = (df.HomeAway == 'Home')
+        filter_away = (df.HomeAway == 'Away')
+        df_home = df.loc[filter_home][['Player', 'Efficiency', 'Team']].sort_values(by=['Efficiency'])
+        df_away = df.loc[filter_away][['Player', 'Efficiency', 'Team']].sort_values(by=['Efficiency'])
+
         dict_min_max = df['Efficiency'].agg(['min', 'max']).to_dict()
         min_eff = dict_min_max['min']
         max_eff = dict_min_max['max']
-        teams = [self.__home_team, self.__away_team]
+        teams = [df_home.Team.unique()[0], df_away.Team.unique()[0]]
+        print(teams)
         both_figures = []
         for idx, df in enumerate([df_home, df_away]):
             figure = {
@@ -273,13 +275,17 @@ class Logic:
 
         columns = ['Assist', 'PeriodName', 'Team', 'HomeAway']
         df_assist = df.loc[f_match_id][columns].groupby(['PeriodName', 'Team', 'HomeAway']).count().reset_index()
-        home_assist = df_assist.loc[df_assist.HomeAway == 'Home']['Assist'].tolist()
-        away_assist = df_assist.loc[df_assist.HomeAway == 'Away']['Assist'].tolist()
+        filter_home = df_assist.HomeAway == 'Home'
+        filter_away = df_assist.HomeAway == 'Away'
+        home_assist = df_assist.loc[filter_home]['Assist'].tolist()
+        away_assist = df_assist.loc[filter_away]['Assist'].tolist()
+        home_team = df_assist.loc[filter_home]['Team'].unique()[0]
+        away_team = df_assist.loc[filter_away]['Team'].unique()[0]
         df_period = df_assist['PeriodName'].unique()
 
         figure_assist = {'data': [
-            {'x': df_period, 'y': home_assist, 'type': 'bar', 'name': self.__home_team},
-            {'x': df_period, 'y': away_assist, 'type': 'bar', 'name': self.__away_team},
+            {'x': df_period, 'y': home_assist, 'type': 'bar', 'name': home_team},
+            {'x': df_period, 'y': away_assist, 'type': 'bar', 'name': away_team},
         ],
             'layout': go.Layout(
                 title='Assists per period',
@@ -287,38 +293,7 @@ class Logic:
             )
         }
 
-        # assist per team per starter/non starter
-        df = df[['PlayerId', 'Assist', 'Team', 'HomeAway', 'MatchId', 'Starter']].loc[df.MatchId == match_id]
-        df_count = df.groupby(['PlayerId', 'Assist', 'Team', 'HomeAway', 'Starter']).count().reset_index()
-        df_count = df_count.rename(columns={'MatchId': 'NoAssists'})
-        df_count = df_count[['Team', 'HomeAway', 'Starter', 'NoAssists']]
-
-        df_count = df_count.groupby(['Team', 'HomeAway', 'Starter']).sum().reset_index()
-        x_axis = df_count.Team.unique()
-        y_trace1 = df_count.loc[df_count.Starter == 'Y']['NoAssists'].tolist()
-        name_trace1 = "Starters"
-        y_trace2 = df_count.loc[df_count.Starter == 'N']['NoAssists'].tolist()
-        name_trace2 = "Bench"
-        trace1 = go.Bar(
-            x=x_axis,
-            y=y_trace1,
-            name=name_trace1
-        )
-        trace2 = go.Bar(
-            x=x_axis,
-            y=y_trace2,
-            name=name_trace2
-        )
-
-        figure_assist_starter_bench = {'data': [trace1, trace2],
-                                       'layout': go.Layout(
-                                           title='Assist distribution between starters and bench',
-                                           xaxis={'title': 'Team'},
-                                           barmode="stack"
-                                       )
-                                       }
-
-        return figure_assist #, figure_assist_starter_bench
+        return figure_assist
 
     def get_box_score_cols(self):
         columns = self.__cols_box_score

@@ -10,7 +10,8 @@ import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-logic = Logic()
+default_match = 7032979
+logic = Logic(str_match_id=default_match, verbose=False)
 
 # Text for explaining Box Score tab
 box_score_star_text = "* - player is starter."
@@ -65,12 +66,10 @@ def style_data_conditional_box_score(max_eff):
         'if': dict_if_eff_max,
         'backgroundColor': 'green'
     }
-    logic.write_details("style_data_conditional_box_score -> " + str(condition_max_eff_home))
     list_style_data_conditional_box_score.append(condition_max_eff_home)
     return list_style_data_conditional_box_score
 
 
-# logic = Logic()
 leagues = logic.all_leagues()  # ['BLNO Kvinner Grunnserie']#, 'BLNO Menn Grunnserie']
 
 #######
@@ -104,7 +103,7 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                      dcc.RadioItems(id='match-dropdown'),
                                      dcc.Dropdown(id='dropdown-match',
                                                   options=logic.match_list(leagues[0]),
-                                                  value=7032979,
+                                                  value=default_match,
                                                   style={'width': '70%',
                                                          'display': 'inline-block'}
                                                   )
@@ -234,11 +233,11 @@ def set_match_value(leagues):
                Output('tab-box-score-title-away', 'label')],
               [Input('dropdown-match', 'value')])
 def memory_title(str_match_id):
-    _return = logic.match_title(int(str_match_id))
+    title = logic.match_title(int(str_match_id))
     title_home = logic.get_home_team()
     title_away = logic.get_away_team()
     quarter_score, dummy = logic.quarter_score(int(str_match_id))
-    return _return, quarter_score, title_home, title_away
+    return title, quarter_score, title_home, title_away
 
 
 @app.callback([Output('h2-title', 'children'),
@@ -312,6 +311,8 @@ def set_box_score(data_cols, data_home, data_away):
         raise PreventUpdate
     style_data_conditional_box_score_home = style_data_conditional_box_score(logic.get_max_eff_home())
     style_data_conditional_box_score_away = style_data_conditional_box_score(logic.get_max_eff_away())
+    logic.write_details("style_data_conditional_box_score_home -> " + str(style_data_conditional_box_score_home))
+    logic.write_details("style_data_conditional_box_score_away -> " + str(style_data_conditional_box_score_away))
 
     return data_cols, data_home, style_data_conditional_box_score_home, \
            data_cols, data_away, style_data_conditional_box_score_away
@@ -328,6 +329,8 @@ def memory_efficiency(str_match_id):
     _return = logic.data_efficiency(int(str_match_id))
     efficiency_home = _return[0]
     efficiency_away = _return[1]
+    logic.write_details("efficiency home -> " + str(efficiency_home))
+    logic.write_details("efficiency away -> " + str(efficiency_away))
     return efficiency_home, efficiency_away
 
 
@@ -349,9 +352,9 @@ def set_efficiency(data_home, data_away):
                Output('memory-assists-starter-bench-data', 'data')],
               [Input('dropdown-match', 'value')])
 def memory_assist(str_match_id):
-    # assist, assist_starter_bench = logic.assist(int(str_match_id))
     assist = logic.assist(int(str_match_id))
     assist_starter_bench = logic.starter_bench(int(str_match_id), 'AST')
+    logic.write_details("assist_starter_bench -> " + str(assist_starter_bench))
     return assist, assist_starter_bench
 
 
