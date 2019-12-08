@@ -195,10 +195,12 @@ class Logic:
         x_minutes = df['MinuteRound']
         y_home = df['Home']
         y_away = df['Away']
+        home_team = self.get_home_team()
+        away_team = self.get_away_team()
 
         # data for accumulated graph
-        accumulation_data = [go.Scatter(x=x_minutes, y=y_home, name=self.get_home_team()),
-                             go.Scatter(x=x_minutes, y=y_away, name=self.get_away_team())]
+        accumulation_data = [go.Scatter(x=x_minutes, y=y_home, name=home_team),
+                             go.Scatter(x=x_minutes, y=y_away, name=away_team)]
 
         figure_cum_scoring = {"data": accumulation_data,
                               "layout": go.Layout(yaxis={"title": "Points"},
@@ -215,10 +217,11 @@ class Logic:
         difference_away = df_difference_away['Difference']
         x_difference_minutes_away = df_difference_away['MinuteRound']
 
+        print(home_team)
         # data for difference graph
         difference_data = [
-            {'x': x_difference_minutes_home, 'y': difference_home, 'type': 'bar', 'name': self.__home_team},
-            {'x': x_difference_minutes_away, 'y': difference_away, 'type': 'bar', 'name': self.__away_team}]
+            {'x': x_difference_minutes_home, 'y': difference_home, 'type': 'bar', 'name': home_team},
+            {'x': x_difference_minutes_away, 'y': difference_away, 'type': 'bar', 'name': away_team}]
         figure_difference = {"data": difference_data}
 
         return figure_cum_scoring, figure_difference
@@ -231,14 +234,16 @@ class Logic:
         df = self.__df_player_stat
         f_match = df.MatchId == match_id
         df = df.loc[f_match]
-
         df = df.copy()
         df['MIN'] = df.MIN.astype(str).str[-10:-5]
 
         self.__max_eff_home = df.loc[df.HomeAway == 'Home']['Efficiency'].agg(['max']).to_dict()['max']
         self.__max_eff_away = df.loc[df.HomeAway == 'Away']['Efficiency'].agg(['max']).to_dict()['max']
-        return df.loc[df.HomeAway == 'Home'][self.__cols_box_score].to_dict(orient='records'), \
-               df.loc[df.HomeAway == 'Away'][self.__cols_box_score].to_dict(orient='records')
+
+        dict_home = df.loc[df.HomeAway == 'Home'].sort_values(['Starter'], ascending=False)[self.__cols_box_score].to_dict(orient='records')
+        dict_away = df.loc[df.HomeAway == 'Away'].sort_values(['Starter'], ascending=False)[self.__cols_box_score].to_dict(orient='records')
+
+        return dict_home, dict_away
 
     def data_efficiency(self, match_id):
         df = self.__df_player_stat
@@ -252,7 +257,6 @@ class Logic:
         min_eff = dict_min_max['min']
         max_eff = dict_min_max['max']
         teams = [df_home.Team.unique()[0], df_away.Team.unique()[0]]
-        print(teams)
         both_figures = []
         for idx, df in enumerate([df_home, df_away]):
             figure = {
@@ -262,7 +266,7 @@ class Logic:
                 'layout': go.Layout(
                     title=teams[idx],
                     xaxis={'title': 'Efficiency', 'range': [min_eff, max_eff]},
-                    margin={'l': 200, 'b': 60, 't': 30, 'r': 20},
+                    margin={'l': 200, 'b': 60, 't': 30, 'r': 20}
                 )
             }
             both_figures.append(figure)
