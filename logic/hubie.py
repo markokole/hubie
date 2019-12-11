@@ -8,10 +8,9 @@ import dash_html_components as html
 import dash_table
 import warnings
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
+#warnings.simplefilter(action='ignore', category=FutureWarning)
 
-default_match = 7032979
-logic = Logic(str_match_id=default_match, verbose=False)
+logic = Logic(verbose=False)
 
 # Text for explaining Box Score tab
 box_score_star_text = "* - player is starter."
@@ -103,7 +102,6 @@ app.layout = html.Div([html.Div([dcc.Store(id='memory-title'),
                                      dcc.RadioItems(id='match-dropdown'),
                                      dcc.Dropdown(id='dropdown-match',
                                                   options=logic.match_list(leagues[0]),
-                                                  value=default_match,
                                                   style={'width': '70%',
                                                          'display': 'inline-block'}
                                                   )

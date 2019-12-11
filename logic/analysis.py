@@ -3,8 +3,6 @@ import warnings
 from logic.dictionary import Dictionary
 from logic.utility import Utility
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
-
 
 class Analysis:
     """
@@ -39,6 +37,7 @@ class Analysis:
         made_shots_df['PointScored'] = made_shots_df.ShotResult.replace(self.__dict_shot_result_points)
         made_shots_df['MinuteRound'] = made_shots_df.MinuteRound.astype('str')
 
+        end_minute = made_shots_df['MinuteRound'].max() # not always 40 - if overtime
         home_shots_cum_df = made_shots_df.loc[made_shots_df.HomeAway == 'Home'][['MinuteRound', 'PointScored']]
         home_shots_cum_df['CumulativePoints'] = home_shots_cum_df.PointScored.cumsum()
         home_shots_cum_df = home_shots_cum_df[['MinuteRound', 'CumulativePoints']] \
@@ -59,9 +58,8 @@ class Analysis:
         dict_home_cum_score = {'1900-01-01 00:00:00': 0}
         dict_away_cum_score = {'1900-01-01 00:00:00': 0}
         list_all_minutes = list(pd.Series(
-            pd.date_range(start='1900-01-01 00:01:00', end='1900-01-01 00:40:00', freq='min'))
+            pd.date_range(start='1900-01-01 00:01:00', end=end_minute, freq='min'))
                                 .dt.strftime('%M-%s'))
-
         home_swapped_dict = dict((v, k) for k, v in dict_home_shots_cum['MinuteRound'].items())
         away_swapped_dict = dict((v, k) for k, v in dict_away_shots_cum['MinuteRound'].items())
 

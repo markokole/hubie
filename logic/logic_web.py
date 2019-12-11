@@ -63,7 +63,7 @@ class Logic:
         """
         df = self.__df_match_list
         filter_league = df.League == league
-        df = df.loc[filter_league].sort_values(by='Match Date')
+        df = df.loc[filter_league].sort_values(['Match Date'], ascending=False)
         dict_all_headers = df.to_dict(orient='records')
         all_game_headers = [{'label': "   {}: {} {}:{} {}".format(row['Short Date'], row['HomeTeam'], row['Score Home'],
                                                                   row['Score Away'], row['AwayTeam']),
@@ -106,12 +106,18 @@ class Logic:
         df = df.loc[f_match_id]
         cols = ['Away', 'Home', 'MinuteRound']
         df = df[cols]
-        quarter_end = [10, 20, 30, 40]  # TO-DO: overtime!!!
+        end_minute = df.MinuteRound.max()
+        print("end_minute:" + str(end_minute))
+        quarter_end = [10, 20, 30, 40]
+        if end_minute > 40: # if overtime add last minute
+            quarter_end.append(end_minute)
+
         last_score_home = 0
         last_score_away = 0
         list_home_quarter_score = []
         list_away_quarter_score = []
         for end in quarter_end:
+            print(end)
             f_end_q = df.MinuteRound == end
             _df = df.loc[f_end_q]
             dict_q = _df.to_dict(orient='records')[0]
@@ -127,7 +133,10 @@ class Logic:
         trace = []  # quarterly scores for showing in graph
         for i in range(0, len(list_home_quarter_score)):
             list_quarter_score.append("{}:{}".format(list_home_quarter_score[i], list_away_quarter_score[i]))
-            temp_name_trace = "{}. quarter".format(str(i + 1))
+            if i < 4:
+                temp_name_trace = "{}. quarter".format(str(i + 1))
+            else:
+                temp_name_trace = "{}. overtime".format(str(i + 1 - 4))
             temp_y_trace = [list_home_quarter_score[i], list_away_quarter_score[i]]
 
             temp_trace = go.Bar(

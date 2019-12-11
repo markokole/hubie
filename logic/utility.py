@@ -70,6 +70,7 @@ class Utility:
 
     def match_header(self):
         folder_name = "match_header"
+        print(self.__df_summary[['Match Date', 'HomeTeam', 'AwayTeam']])
         self.save_dataframe(self.__df_summary, folder_name)
 
     def __parse_events_file(self):
@@ -116,11 +117,12 @@ class Utility:
         """
         events = pd.DataFrame(data['Events']).fillna(0) # text replacement
         events = events.loc[events.PeriodTime != ''] # remove rows with no time
-        events['PeriodName'] = events['PeriodName'].str.replace('. periode', '') # remove .periode
+        #print(events.PeriodName.unique())
+        #events['PeriodName'] = events['PeriodName'].str.replace('. periode', '') # remove .periode
         events['Team'] = events['Team'].replace({'B': 'Away', 'H': 'Home'}) #change norwegian B (Borte) with english A (Away)
 
         # type conversion
-        convert_cols = ['Assist', 'Player', 'PlayerIn', 'PlayerOut', 'ShotResult', 'PeriodName', 'FoulType']
+        convert_cols = ['Assist', 'Player', 'PlayerIn', 'PlayerOut', 'ShotResult', 'FoulType']
         events[convert_cols] = events[convert_cols].apply(lambda x: x.astype('int32'))
 
         #format PeriodTime column
@@ -128,10 +130,12 @@ class Utility:
         events = events.rename(columns={'Team': 'HomeAway'})
 
         # Creates column Minute which hold time values from 00:00:00 to 00:40:00
-        events['Minute'] = 10 * (events['PeriodName'] - 1)
+        dict_period_to_minute = {'1. periode': 0, '2. periode': 10, '3. periode': 20, '4. periode': 30, '1. ekstraomgang': 40}
+        #events['Minute'] = 10 * (events['PeriodName'] - 1)
+        events['Minute'] = events.PeriodName.replace(dict_period_to_minute)
         events['Minute'] = pd.to_timedelta(events.Minute, unit='m')
         events['Minute'] = events['Minute'] + events['PeriodTime']
-
+        #print(events.Minute.unique())
         # Round up to a full minute for aggregation
         events['MinuteRound'] = events.Minute.dt.ceil(freq="min")
 
