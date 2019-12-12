@@ -230,11 +230,12 @@ def set_match_value(leagues):
                Output('tab-box-score-title-home', 'label'),
                Output('tab-box-score-title-away', 'label')],
               [Input('dropdown-match', 'value')])
-def memory_title(str_match_id):
-    title = logic.match_title(int(str_match_id))
+def memory_title(match_id):
+    print(match_id)
+    title = logic.match_title(match_id)
     title_home = logic.get_home_team()
     title_away = logic.get_away_team()
-    quarter_score, dummy = logic.quarter_score(int(str_match_id))
+    quarter_score, dummy = logic.quarter_score(match_id)
     return title, quarter_score, title_home, title_away
 
 
@@ -257,10 +258,10 @@ def set_h1_title(title_data, quarter_score_data):
                Output('memory-score-starter-bench-data', 'data'),
                Output('memory-score-per-quarter-data', 'data')],
               [Input('dropdown-match', 'value')])
-def memory_scoring(str_match_id):
-    _return_cumulative_score, _return_difference = logic.cumulative_score(int(str_match_id))
-    _return_score_starter_bench = logic.starter_bench(int(str_match_id), 'Points')
-    quarter_score, _return_score_per_quarter = logic.quarter_score(int(str_match_id))
+def memory_scoring(match_id):
+    _return_cumulative_score, _return_difference = logic.cumulative_score(match_id)
+    _return_score_starter_bench = logic.starter_bench(match_id, 'Points')
+    quarter_score, _return_score_per_quarter = logic.quarter_score(match_id)
     return _return_cumulative_score, _return_difference, _return_score_starter_bench, _return_score_per_quarter
 
 
@@ -323,8 +324,8 @@ def set_box_score(data_cols, data_home, data_away):
 @app.callback([Output('memory-efficiency-home-data', 'data'),
                Output('memory-efficiency-away-data', 'data')],
               [Input('dropdown-match', 'value')])
-def memory_efficiency(str_match_id):
-    _return = logic.data_efficiency(int(str_match_id))
+def memory_efficiency(match_id):
+    _return = logic.data_efficiency(match_id)
     efficiency_home = _return[0]
     efficiency_away = _return[1]
     logic.write_details("efficiency home -> " + str(efficiency_home))
@@ -363,7 +364,6 @@ def memory_assist(str_match_id):
 def set_assist(data_assist, data_assist_starter_bench):
     if (data_assist is None) | (data_assist_starter_bench is None):
         raise PreventUpdate
-    # print(data_assist)
     return data_assist, data_assist_starter_bench  # data_assist, {} #data_assist_starter_bench
 
 
