@@ -117,8 +117,6 @@ class Utility:
         """
         events = pd.DataFrame(data['Events']).fillna(0) # text replacement
         events = events.loc[events.PeriodTime != ''] # remove rows with no time
-        #print(events.PeriodName.unique())
-        #events['PeriodName'] = events['PeriodName'].str.replace('. periode', '') # remove .periode
         events['Team'] = events['Team'].replace({'B': 'Away', 'H': 'Home'}) #change norwegian B (Borte) with english A (Away)
 
         # type conversion
@@ -128,14 +126,14 @@ class Utility:
         #format PeriodTime column
         events['PeriodTime'] = pd.to_datetime(events.PeriodTime, format='%M:%S')
         events = events.rename(columns={'Team': 'HomeAway'})
+        # Creates column Minute which hold time values from 00:00:00 to 00:50:00
+        dict_period_to_minute = {'1. periode': 0, '2. periode': 10, '3. periode': 20, '4. periode': 30,
+                                 '1. ekstraomgang': 40, '2. ekstraomgang': 45, '3. ekstraomgang': 50}
 
-        # Creates column Minute which hold time values from 00:00:00 to 00:40:00
-        dict_period_to_minute = {'1. periode': 0, '2. periode': 10, '3. periode': 20, '4. periode': 30, '1. ekstraomgang': 40}
-        #events['Minute'] = 10 * (events['PeriodName'] - 1)
         events['Minute'] = events.PeriodName.replace(dict_period_to_minute)
         events['Minute'] = pd.to_timedelta(events.Minute, unit='m')
         events['Minute'] = events['Minute'] + events['PeriodTime']
-        #print(events.Minute.unique())
+
         # Round up to a full minute for aggregation
         events['MinuteRound'] = events.Minute.dt.ceil(freq="min")
 

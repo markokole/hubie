@@ -106,18 +106,22 @@ class Logic:
         df = df.loc[f_match_id]
         cols = ['Away', 'Home', 'MinuteRound']
         df = df[cols]
+
+        # logic for overtimes
         end_minute = df.MinuteRound.max()
-        print("end_minute:" + str(end_minute))
-        quarter_end = [10, 20, 30, 40]
-        if end_minute > 40: # if overtime add last minute
-            quarter_end.append(end_minute)
+        regular_end = 40
+        period_end = [10, 20, 30, regular_end]
+        minutes_past_regulation = end_minute - regular_end
+        no_overtimes = int(minutes_past_regulation / 5)
+        for i in range(1, no_overtimes + 1):
+            overtime_end = regular_end + i * 5
+            period_end.append(overtime_end)
 
         last_score_home = 0
         last_score_away = 0
         list_home_quarter_score = []
         list_away_quarter_score = []
-        for end in quarter_end:
-            print(end)
+        for end in period_end:
             f_end_q = df.MinuteRound == end
             _df = df.loc[f_end_q]
             dict_q = _df.to_dict(orient='records')[0]
@@ -129,7 +133,7 @@ class Logic:
             last_score_away = dict_q['Away']
 
         x_axis = [self.__home_team, self.__away_team]
-        list_quarter_score = []  # quartery score for showing in heading
+        list_quarter_score = []  # quarter score for showing in heading
         trace = []  # quarterly scores for showing in graph
         for i in range(0, len(list_home_quarter_score)):
             list_quarter_score.append("{}:{}".format(list_home_quarter_score[i], list_away_quarter_score[i]))
@@ -226,7 +230,6 @@ class Logic:
         difference_away = df_difference_away['Difference']
         x_difference_minutes_away = df_difference_away['MinuteRound']
 
-        print(home_team)
         # data for difference graph
         difference_data = [
             {'x': x_difference_minutes_home, 'y': difference_home, 'type': 'bar', 'name': home_team},
@@ -281,6 +284,24 @@ class Logic:
             both_figures.append(figure)
 
         return both_figures
+    '''
+    def __add_zero_rows(self, df):
+        """
+
+        :param df:
+        :return:
+        """
+        all_periods = df.PeriodName.unique()
+        all_teams = df.HomeAway.unique()
+        for period in all_periods:
+            for team in all_teams:
+                f = (df.PeriodName == period) & (df.HomeAway == team)
+                if df.PeriodName.loc[f].count() == 0:
+                    print("Missing!! {} {}".format(period, team))
+                    missing_row = {'PeriodName': period, 'Assist': 0, 'HomeAway': team}
+                    df = df.append(missing_row, ignore_index=True)
+        return df
+    '''
 
     def assist(self, match_id):
         df = self.__df_assist
@@ -288,24 +309,34 @@ class Logic:
 
         columns = ['Assist', 'PeriodName', 'Team', 'HomeAway']
         df_assist = df.loc[f_match_id][columns].groupby(['PeriodName', 'Team', 'HomeAway']).count().reset_index()
+
+        # get Home Away teams
+        d = df_assist[['HomeAway', 'Team']].drop_duplicates().to_dict(orient='split')
+        dict_home_away = {d['data'][0][0]: d['data'][0][1], d['data'][1][0]: d['data'][1][1]}
+
+        dict_period = {'1. periode': '1. Period', '2. periode': '2. Period', '3. periode': '3. Period', '4. periode': '4. Period',
+                       '1. ekstraomgang': 'Overtime 1', '2. ekstraomgang': 'Overtime 2'}
+        df_assist['PeriodName'] = df_assist.PeriodName.replace(dict_period)
+        home_team = dict_home_away['Home']
+        away_team = dict_home_away['Away']
+        df_assist = df_assist.drop('Team', axis=1)
+        #df_assist = self.__add_zero_rows(df_assist)
+        df_assist = df_assist.sort_values('PeriodName')
         filter_home = df_assist.HomeAway == 'Home'
         filter_away = df_assist.HomeAway == 'Away'
         home_assist = df_assist.loc[filter_home]['Assist'].tolist()
         away_assist = df_assist.loc[filter_away]['Assist'].tolist()
-        home_team = df_assist.loc[filter_home]['Team'].unique()[0]
-        away_team = df_assist.loc[filter_away]['Team'].unique()[0]
-        df_period = df_assist['PeriodName'].unique()
 
+        x_axis_values = df_assist['PeriodName'].unique()
         figure_assist = {'data': [
-            {'x': df_period, 'y': home_assist, 'type': 'bar', 'name': home_team},
-            {'x': df_period, 'y': away_assist, 'type': 'bar', 'name': away_team},
+            {'x': x_axis_values, 'y': home_assist, 'type': 'bar', 'name': home_team},
+            {'x': x_axis_values, 'y': away_assist, 'type': 'bar', 'name': away_team},
         ],
             'layout': go.Layout(
                 title='Assists per period',
-                xaxis={'title': 'Period'}
+                #xaxis={'title': 'Period'}
             )
         }
-
         return figure_assist
 
     def get_box_score_cols(self):
